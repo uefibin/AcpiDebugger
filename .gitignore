@@ -11,6 +11,7 @@
 **/publish-*/
 *.log
 **/tools/*.exe
+/release/
 
 # Legacy / excluded sources
 **/Form1.cs
