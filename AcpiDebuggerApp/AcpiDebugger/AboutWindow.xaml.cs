@@ -13,7 +13,9 @@ public partial class AboutWindow : Window
 
         var assembly = Assembly.GetExecutingAssembly();
         VersionText.Text = assembly.GetName().Version?.ToString() ?? "1.0.0.0";
-        BuildDateText.Text = File.GetLastWriteTime(assembly.Location)
+        var executablePath = Environment.ProcessPath
+            ?? Path.Combine(AppContext.BaseDirectory, "AcpiDebugger.exe");
+        BuildDateText.Text = File.GetLastWriteTime(executablePath)
             .ToString("yyyy-MM-dd HH:mm:ss");
     }
 
