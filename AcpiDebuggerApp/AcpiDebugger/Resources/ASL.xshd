@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<SyntaxDefinition name="ASL" extensions=".dsl;.asl" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+  <Color name="Comment" foreground="#6A9955" fontStyle="italic"/>
+  <Color name="String" foreground="#CE9178"/>
+  <Color name="Number" foreground="#B5CEA8"/>
+  <Color name="Keyword" foreground="#569CD6" fontWeight="bold"/>
+  <Color name="Type" foreground="#4EC9B0"/>
+  <Color name="Predefined" foreground="#DCDCAA"/>
+  <RuleSet>
+    <Span color="Comment" begin="/\*" end="\*/"/>
+    <Span color="String" begin="&quot;" end="&quot;"/>
+    <Span color="Comment" begin="//" end="$"/>
+    <Rule color="Number">\b(0x[0-9A-Fa-f]+|[0-9]+)\b</Rule>
+    <Keywords color="Keyword">
+      <Word>DefinitionBlock</Word><Word>Scope</Word><Word>Device</Word><Word>Method</Word>
+      <Word>If</Word><Word>Else</Word><Word>ElseIf</Word><Word>While</Word><Word>Switch</Word><Word>Case</Word><Word>Default</Word>
+      <Word>Return</Word><Word>Break</Word><Word>Continue</Word><Word>Store</Word><Word>Notify</Word>
+      <Word>Name</Word><Word>Alias</Word><Word>External</Word><Word>Include</Word>
+    </Keywords>
+    <Keywords color="Type">
+      <Word>OperationRegion</Word><Word>Field</Word><Word>IndexField</Word><Word>BankField</Word>
+      <Word>Package</Word><Word>Buffer</Word><Word>ResourceTemplate</Word><Word>Mutex</Word><Word>Event</Word>
+      <Word>Integer</Word><Word>String</Word><Word>Debug</Word>
+    </Keywords>
+    <Keywords color="Predefined">
+      <Word>Arg0</Word><Word>Arg1</Word><Word>Arg2</Word><Word>Arg3</Word><Word>Arg4</Word><Word>Arg5</Word><Word>Arg6</Word>
+      <Word>Local0</Word><Word>Local1</Word><Word>Local2</Word><Word>Local3</Word><Word>Local4</Word><Word>Local5</Word><Word>Local6</Word><Word>Local7</Word>
+      <Word>Zero</Word><Word>One</Word><Word>Ones</Word>
+    </Keywords>
+    <Rule color="Predefined">\b_[A-Z0-9]{3}\b</Rule>
+  </RuleSet>
+</SyntaxDefinition>

@@ -1,0 +1,24 @@
+# .NET / Visual Studio
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+
+# Generated ACPI workspace and outputs
+**/AcpiWorkspace/
+**/publish/
+**/publish-*/
+*.log
+
+# Legacy / excluded sources
+**/Form1.cs
+**/Form1.Designer.cs
+
+# Local development notes
+design-qa.md
+gemini.md
+
+# OS files
+Thumbs.db
+.DS_Store
