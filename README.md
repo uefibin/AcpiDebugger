@@ -10,8 +10,6 @@
 
 > ⭐ If ACPI Debugger helps your BIOS/UEFI development, consider giving the project a Star.
 
-[![Star History](https://api.star-history.com/svg?repos=uefibin/AcpiDebugger&type=Date)](https://star-history.com/#uefibin/AcpiDebugger&Date)
-
 A modern Windows ACPI development and debugging tool for BIOS/UEFI engineers. It provides a complete workflow for dumping ACPI tables, decompiling AML, editing ASL, compiling AML, and loading Windows ACPI overrides.
 
 ## Features
@@ -50,7 +48,7 @@ Load Override
 | `acpidump.exe` | [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | Dump ACPI tables from Windows | `AcpiDebuggerApp/tools/acpidump.exe` |
 | `asl.exe` | [Microsoft ASL compiler](https://learn.microsoft.com/windows-hardware/drivers/bringup/microsoft-asl-compiler) | Microsoft license | Load ACPI override tables into Windows | `AcpiDebuggerApp/tools/asl.exe` or a directory in `PATH` |
 
-The repository currently contains `iasl.exe` and `acpidump.exe`. Obtain `asl.exe` from the Windows Driver Kit (WDK) when override loading is required. Verify that redistribution of any external binary complies with its license.
+External executables are not included in this repository. Download `iasl.exe` and `acpidump.exe` from ACPICA, and obtain `asl.exe` from the Windows Driver Kit (WDK) when override loading is required. Verify that use and redistribution of every external binary complies with its license.
 
 Expected structure:
 

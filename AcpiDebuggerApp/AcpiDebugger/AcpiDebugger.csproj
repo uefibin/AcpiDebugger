@@ -22,11 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\tools\iasl.exe" Link="tools\iasl.exe">
+    <Content Include="..\tools\iasl.exe" Link="tools\iasl.exe" Condition="Exists('..\tools\iasl.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Include="..\tools\acpidump.exe" Link="tools\acpidump.exe">
+    <Content Include="..\tools\acpidump.exe" Link="tools\acpidump.exe" Condition="Exists('..\tools\acpidump.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

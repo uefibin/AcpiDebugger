@@ -10,8 +10,6 @@
 
 > ⭐ 如果 ACPI Debugger 对你的 BIOS/UEFI 开发有帮助，欢迎 Star 支持项目。
 
-[![Star History](https://api.star-history.com/svg?repos=uefibin/AcpiDebugger&type=Date)](https://star-history.com/#uefibin/AcpiDebugger&Date)
-
 ACPI Debugger 是一款面向 BIOS/UEFI 工程师的 Windows ACPI 开发与调试工具，提供 ACPI 表导出、AML 反编译、ASL 编辑、AML 编译及 Windows ACPI Override 加载的一站式工作流。
 
 ## 功能特点
@@ -50,7 +48,7 @@ Load Override
 | `acpidump.exe` | [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | 导出 Windows ACPI Table | `AcpiDebuggerApp/tools/acpidump.exe` |
 | `asl.exe` | [Microsoft ASL Compiler](https://learn.microsoft.com/windows-hardware/drivers/bringup/microsoft-asl-compiler) | Microsoft License | 加载 Windows ACPI Override Table | `AcpiDebuggerApp/tools/asl.exe` 或 `PATH` 中的目录 |
 
-仓库当前已包含 `iasl.exe` 和 `acpidump.exe`。需要加载 Override 时，请从 Windows Driver Kit（WDK）获取 `asl.exe`。分发任何外部二进制文件前，请确认符合其许可证要求。
+本仓库不包含外部 EXE 文件。请从 ACPICA 下载 `iasl.exe` 和 `acpidump.exe`；需要加载 Override 时，请从 Windows Driver Kit（WDK）获取 `asl.exe`。使用或分发任何外部二进制文件前，请确认符合其许可证要求。
 
 目录结构：
 
