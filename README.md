@@ -92,7 +92,7 @@ Run the application as administrator when dumping tables or loading overrides.
 **bin**
 
 - Blog: [https://ay123.net](https://ay123.net)
-- WeChat Official Account: **UEFI那点事**
+- WeChat: **UEFI那点事**
 
 ## License
 
