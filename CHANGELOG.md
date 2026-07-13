@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.1.0 - 2026-07-13
+
+- Added a new Windows application icon and applied it to the executable, taskbar, main window, and About window.
+- Automatically switch to the Output tab whenever an operation starts or writes log output.
+- Added timestamped operation-start logging for dump, compile, decompile, batch, and override actions.
 - Refactored ACPICA process execution into `AcpiToolService`.
 - Added cancellable batch compile and decompile operations with overall progress.
 - Added ACPI table parsing/checksum service and shared models.
