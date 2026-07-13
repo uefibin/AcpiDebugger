@@ -7,6 +7,7 @@
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +20,8 @@
 
   <ItemGroup>
     <Resource Include="Resources\ASL.xshd" />
+    <Resource Include="Resources\AppIcon.ico" />
+    <Resource Include="Resources\AppIcon.png" />
   </ItemGroup>
 
   <ItemGroup>

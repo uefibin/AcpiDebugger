@@ -1011,8 +1011,16 @@ public partial class MainWindow : Window
     {
         ToolbarPanel.IsEnabled = !busy && !_batchRunning;
         Mouse.OverrideCursor = null;
-        if (status != null) StatusText.Text = status;
-        else if (!busy && !_batchRunning) StatusText.Text = "Ready";
+        if (status != null)
+        {
+            StatusText.Text = status;
+            if (busy)
+                Log(status);
+        }
+        else if (!busy && !_batchRunning)
+        {
+            StatusText.Text = "Ready";
+        }
     }
 
     private void UpdateCaretStatus()
@@ -1027,6 +1035,8 @@ public partial class MainWindow : Window
             Dispatcher.Invoke(() => Log(message));
             return;
         }
+
+        BottomTabs.SelectedItem = OutputTab;
 
         string line = $"[{DateTime.Now:HH:mm:ss}] {message.TrimEnd()}";
         OutputBox.Document.Blocks.Add(new Paragraph(new Run(line))
