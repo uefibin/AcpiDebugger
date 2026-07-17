@@ -315,7 +315,10 @@
                         <StackPanel>
                             <TextBlock Text="Override" FontWeight="SemiBold" Margin="0,0,0,5"/>
                             <TextBlock Text="Load this table as an override in Windows test mode." Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"/>
-                            <Button Content="Load override…" Margin="0" Click="LoadToSystem_Click"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Load override…" Margin="0,0,8,0" Click="LoadToSystem_Click"/>
+                                <Button Content="Remove override" Click="RemoveOverride_Click"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                 </Grid>

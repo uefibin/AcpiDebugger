@@ -17,4 +17,16 @@ public sealed class AcpiOverrideService
             () => AcpiLoader.LoadAcpiTable(amlFilePath, _toolsDirectory),
             cancellationToken);
     }
+
+    public Task<string> RemoveAsync(
+        string amlFilePath,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.Run(
+            () => AcpiLoader.RemoveAcpiTable(
+                amlFilePath,
+                _toolsDirectory,
+                cancellationToken),
+            cancellationToken);
+    }
 }

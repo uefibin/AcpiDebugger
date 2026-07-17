@@ -5,6 +5,7 @@ using ICSharpCode.AvalonEdit.Highlighting;
 using AcpiDebugger.Models;
 using AcpiDebugger.Services;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -430,6 +431,63 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ShowError("Load failed", ex);
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async void RemoveOverride_Click(object sender, RoutedEventArgs e)
+    {
+        if (AmlList.SelectedItem is not AcpiFileItem item)
+        {
+            MessageBox.Show(
+                "Select the AML table whose override should be removed.",
+                "No selection",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            SetBusy(true, $"Removing override for {item.Filename}...");
+            string result = await _overrideService!.RemoveAsync(
+                Path.Combine(_workspaceDir, item.Filename));
+            Log(result);
+
+            if (result.StartsWith("Success:", StringComparison.Ordinal))
+            {
+                MessageBoxResult restart = MessageBox.Show(
+                    result + "\n\nRestart Windows now?",
+                    "Restart required",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+
+                if (restart == MessageBoxResult.Yes)
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "shutdown.exe",
+                        Arguments = "/r /t 0",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                }
+            }
+            else
+            {
+                MessageBox.Show(
+                    result,
+                    "ACPI Override",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError("Remove override failed", ex);
         }
         finally
         {

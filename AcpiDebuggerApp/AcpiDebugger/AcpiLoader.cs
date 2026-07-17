@@ -3,11 +3,19 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Text;
+using Microsoft.Win32;
 
 namespace AcpiDebugger;
 
 public static class AcpiLoader
 {
+    private readonly record struct AcpiTableIdentity(
+        string Signature,
+        string OemId,
+        string OemTableId,
+        uint OemRevision);
+
     // SYSTEM_CODEINTEGRITY_INFORMATION
     [StructLayout(LayoutKind.Sequential)]
     private struct SYSTEM_CODEINTEGRITY_INFORMATION
@@ -86,14 +94,20 @@ public static class AcpiLoader
             sum = (sum + table[index]) & 0xFF;
         table[9] = unchecked((byte)(0 - sum));
 
-        string sourceDirectory = Path.GetDirectoryName(sourcePath) ?? AppContext.BaseDirectory;
-        string overrideDirectory = Path.Combine(sourceDirectory, "Overrides");
+        string overridePath = GetOverridePath(sourcePath);
+        string overrideDirectory = Path.GetDirectoryName(overridePath)!;
         Directory.CreateDirectory(overrideDirectory);
-        string overridePath = Path.Combine(
-            overrideDirectory,
-            Path.GetFileNameWithoutExtension(sourcePath) + ".override.aml");
         File.WriteAllBytes(overridePath, table);
         return overridePath;
+    }
+
+    private static string GetOverridePath(string sourcePath)
+    {
+        string sourceDirectory = Path.GetDirectoryName(sourcePath) ?? AppContext.BaseDirectory;
+        return Path.Combine(
+            sourceDirectory,
+            "Overrides",
+            Path.GetFileNameWithoutExtension(sourcePath) + ".override.aml");
     }
 
     public static string LoadAcpiTable(string amlFilePath, string toolsDir)
@@ -186,5 +200,256 @@ public static class AcpiLoader
         {
              return $"Error executing asl.exe: {ex.Message}\nMake sure Microsoft ASL Compiler is installed or in the tools folder.";
         }
+    }
+
+    public static string RemoveAcpiTable(
+        string amlFilePath,
+        string toolsDir,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsRunningAsAdministrator())
+        {
+            return "Error: Administrator privileges are required.\n"
+                 + "Please restart AcpiDebugger as administrator.";
+        }
+
+        string aslPath = Path.Combine(toolsDir, "asl.exe");
+        if (!File.Exists(aslPath))
+            aslPath = "asl.exe";
+
+        try
+        {
+            // Prefer the exact table generated during Load. Rebuilding it from the
+            // current source could target a different revision after the file changes.
+            string overridePath = GetOverridePath(amlFilePath);
+            if (!File.Exists(overridePath))
+            {
+                overridePath = PrepareOverrideTable(
+                    amlFilePath,
+                    out _,
+                    out _);
+            }
+
+            AcpiTableIdentity identity = ReadAcpiTableIdentity(overridePath);
+            bool existedBefore = RegistryOverrideExists(identity);
+
+            using var proc = new Process();
+            proc.StartInfo.FileName = aslPath;
+            proc.StartInfo.Arguments = $"/loadtable -v -d \"{overridePath}\"";
+            proc.StartInfo.UseShellExecute = false;
+            proc.StartInfo.RedirectStandardOutput = true;
+            proc.StartInfo.RedirectStandardError = true;
+            proc.StartInfo.CreateNoWindow = true;
+
+            proc.Start();
+            Task<string> outputTask = proc.StandardOutput.ReadToEndAsync(cancellationToken);
+            Task<string> errorTask = proc.StandardError.ReadToEndAsync(cancellationToken);
+
+            try
+            {
+                var timeout = Stopwatch.StartNew();
+                while (!proc.WaitForExit(200))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (timeout.Elapsed >= TimeSpan.FromSeconds(30))
+                        throw new TimeoutException("asl.exe did not finish within 30 seconds.");
+                }
+            }
+            catch
+            {
+                if (!proc.HasExited)
+                    proc.Kill(entireProcessTree: true);
+                throw;
+            }
+
+            string output = outputTask.GetAwaiter().GetResult();
+            string error = errorTask.GetAwaiter().GetResult();
+
+            string fullOutput = (output + "\n" + error).Trim();
+
+            // Microsoft ASL 5.0 returns exit code 1 even after a successful
+            // /loadtable -d operation. Its completion message is authoritative.
+            bool registryDataDeleted = fullOutput.Contains(
+                "Registry data deleted",
+                StringComparison.OrdinalIgnoreCase);
+            bool existsAfter = RegistryOverrideExists(identity);
+
+            if (!existsAfter && (registryDataDeleted || (proc.ExitCode == 0 && existedBefore)))
+            {
+                return "Success: ACPI override revision was removed.\n"
+                     + $"Table: {Path.GetFileName(amlFilePath)}\n"
+                     + $"OEM Revision: 0x{identity.OemRevision:X8}\n"
+                     + "The currently loaded ACPI namespace is unchanged. "
+                     + "Restart Windows to restore the firmware ACPI table.";
+            }
+
+            if (!existedBefore && !existsAfter)
+            {
+                return "Error: no matching staged ACPI override was found.\n"
+                     + $"Table: {Path.GetFileName(amlFilePath)}\n"
+                     + $"OEM Revision: 0x{identity.OemRevision:X8}\n\n"
+                     + fullOutput;
+            }
+
+            if (existsAfter)
+            {
+                return "Error: asl.exe did not remove the requested ACPI override revision "
+                     + $"0x{identity.OemRevision:X8}.\n\n{fullOutput}";
+            }
+
+            return $"Error removing ACPI override (Exit Code {proc.ExitCode}):\n{fullOutput}";
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 2)
+        {
+            try
+            {
+                string overridePath = GetOverridePath(amlFilePath);
+                if (!File.Exists(overridePath))
+                {
+                    overridePath = PrepareOverrideTable(
+                        amlFilePath,
+                        out _,
+                        out _);
+                }
+
+                AcpiTableIdentity identity = ReadAcpiTableIdentity(overridePath);
+                bool removed = RemoveRegistryRevision(identity);
+                return removed
+                    ? $"Success: removed ACPI override revision 0x{identity.OemRevision:X8}.\n"
+                      + "Restart Windows to restore the firmware ACPI table."
+                    : "Error: 'asl.exe' was not found and no matching registry override was found.";
+            }
+            catch (Exception registryException)
+            {
+                return "Error: 'asl.exe' was not found and direct registry cleanup failed: "
+                     + registryException.Message;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return $"Error executing asl.exe: {ex.Message}";
+        }
+    }
+
+    private static AcpiTableIdentity ReadAcpiTableIdentity(string amlFilePath)
+    {
+        byte[] table = File.ReadAllBytes(amlFilePath);
+        if (table.Length < 36)
+            throw new InvalidDataException("The selected file is not a valid ACPI table.");
+
+        uint tableLength = BitConverter.ToUInt32(table, 4);
+        if (tableLength < 36 || tableLength > table.Length)
+            throw new InvalidDataException("The ACPI table length in the header is invalid.");
+
+        string signature = ReadAcpiRegistryId(table, 0, 4);
+        string oemId = ReadAcpiRegistryId(table, 10, 6);
+        string oemTableId = ReadAcpiRegistryId(table, 16, 8);
+        if (string.IsNullOrWhiteSpace(signature)
+            || string.IsNullOrWhiteSpace(oemId)
+            || string.IsNullOrWhiteSpace(oemTableId))
+        {
+            throw new InvalidDataException("The ACPI table identity fields are invalid.");
+        }
+
+        return new AcpiTableIdentity(
+            signature,
+            oemId,
+            oemTableId,
+            BitConverter.ToUInt32(table, 24));
+    }
+
+    private static bool RegistryOverrideExists(AcpiTableIdentity identity)
+    {
+        const string parametersPath =
+            @"SYSTEM\CurrentControlSet\Services\ACPI\Parameters";
+        using RegistryKey? parameters = Registry.LocalMachine.OpenSubKey(parametersPath);
+        using RegistryKey? signatureKey = parameters?.OpenSubKey(identity.Signature);
+        using RegistryKey? oemKey = signatureKey?.OpenSubKey(identity.OemId);
+        using RegistryKey? tableKey = oemKey?.OpenSubKey(identity.OemTableId);
+        using RegistryKey? revisionKey = tableKey?.OpenSubKey(
+            identity.OemRevision.ToString("X8"));
+        return revisionKey != null;
+    }
+
+    private static bool RemoveRegistryRevision(AcpiTableIdentity identity)
+    {
+        const string parametersPath =
+            @"SYSTEM\CurrentControlSet\Services\ACPI\Parameters";
+        using RegistryKey? parameters = Registry.LocalMachine.OpenSubKey(
+            parametersPath,
+            writable: true);
+        if (parameters == null)
+            return false;
+
+        bool removeSignatureKey;
+        using (RegistryKey? signatureKey = parameters.OpenSubKey(
+            identity.Signature,
+            writable: true))
+        {
+            if (signatureKey == null)
+                return false;
+
+            bool removeOemKey;
+            using (RegistryKey? oemKey = signatureKey.OpenSubKey(
+                identity.OemId,
+                writable: true))
+            {
+                if (oemKey == null)
+                    return false;
+
+                bool removeTableKey;
+                using (RegistryKey? tableKey = oemKey.OpenSubKey(
+                    identity.OemTableId,
+                    writable: true))
+                {
+                    if (tableKey == null)
+                        return false;
+
+                    string revision = identity.OemRevision.ToString("X8");
+                    using RegistryKey? revisionKey = tableKey.OpenSubKey(revision);
+                    if (revisionKey == null)
+                        return false;
+
+                    revisionKey.Close();
+                    tableKey.DeleteSubKeyTree(revision, throwOnMissingSubKey: false);
+                    removeTableKey = tableKey.SubKeyCount == 0 && tableKey.ValueCount == 0;
+                }
+
+                if (removeTableKey)
+                    oemKey.DeleteSubKeyTree(identity.OemTableId, throwOnMissingSubKey: false);
+
+                removeOemKey = oemKey.SubKeyCount == 0 && oemKey.ValueCount == 0;
+            }
+
+            if (removeOemKey)
+                signatureKey.DeleteSubKeyTree(identity.OemId, throwOnMissingSubKey: false);
+
+            removeSignatureKey = signatureKey.SubKeyCount == 0
+                              && signatureKey.ValueCount == 0;
+        }
+
+        if (removeSignatureKey)
+            parameters.DeleteSubKeyTree(identity.Signature, throwOnMissingSubKey: false);
+
+        return true;
+    }
+
+    private static string ReadAcpiRegistryId(byte[] table, int offset, int length)
+    {
+        int valueLength = Array.IndexOf(table, (byte)0, offset, length);
+        if (valueLength < 0)
+            valueLength = offset + length;
+
+        string value = Encoding.ASCII.GetString(table, offset, valueLength - offset);
+        if (value.Contains('\\') || value.Any(char.IsControl))
+            throw new InvalidDataException("The ACPI table identity fields are invalid.");
+
+        // Preserve spaces before the NUL terminator: asl.exe uses them in the
+        // registry key name. Removing them makes direct cleanup miss the key.
+        return value;
     }
 }

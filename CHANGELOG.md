@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.2.0 - 2026-07-17
+
+- Added a Remove Override action with an optional immediate Windows restart.
+- Fixed ACPI override removal to target only the exact staged OEM revision, preserve padded ACPI identifiers, and avoid deleting unrelated registry revisions.
+- Added removal verification, cancellation support, and an `asl.exe` timeout.
+- Changed the About dialog to display the semantic product version.
+
 ## 1.1.0 - 2026-07-13
 
 - Added a new Windows application icon and applied it to the executable, taskbar, main window, and About window.

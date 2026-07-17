@@ -12,7 +12,11 @@ public partial class AboutWindow : Window
         InitializeComponent();
 
         var assembly = Assembly.GetExecutingAssembly();
-        VersionText.Text = assembly.GetName().Version?.ToString() ?? "1.0.0.0";
+        VersionText.Text = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion
+            .Split('+')[0]
+            ?? "1.0.0";
         var executablePath = Environment.ProcessPath
             ?? Path.Combine(AppContext.BaseDirectory, "AcpiDebugger.exe");
         BuildDateText.Text = File.GetLastWriteTime(executablePath)
