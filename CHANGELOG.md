@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.3.0 - 2026-07-23
+
+- Added a Table-specific details tab alongside the common ACPI header view.
+- Added structured field parsing for BGRT, APIC, DBG2, DBGP, FACP, FPDT, HPET, LPIT, MCFG, TPM2, UEFI, WSMT, and XSDT tables.
+- Added safe AML payload summaries for DSDT/SSDT and generic payload previews for vendor-specific tables.
+- Matched the Table-specific field layout and typography to the Common details tab.
+- Expanded friendly table descriptions for common debugging, performance, security, and firmware tables.
+
 ## 1.2.0 - 2026-07-17
 
 - Added a Remove Override action with an optional immediate Windows restart.

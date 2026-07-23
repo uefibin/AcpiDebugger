@@ -614,6 +614,7 @@ public partial class MainWindow : Window
             DetailCreatorId.Text = info.CreatorId;
             DetailCreatorRevision.Text = $"0x{info.CreatorRevision:X8}";
             DetailSource.Text = info.Source;
+            UpdateTableSpecificDetails(filePath, info.Signature);
             DetailValidated.Text = info.ChecksumValid
                 ? "Yes — checksum valid"
                 : "No — checksum mismatch";
@@ -622,7 +623,28 @@ public partial class MainWindow : Window
         {
             DetailDescription.Text = ex.Message;
             DetailValidated.Text = "Unable to validate";
+            ClearTableSpecificDetails("Unable to read table-specific information");
         }
+    }
+
+    private void UpdateTableSpecificDetails(string filePath, string signature)
+    {
+        try
+        {
+            AcpiTableSpecificInfo info = AcpiTableSpecificService.Read(filePath, signature);
+            SpecificTableSummary.Text = info.Summary;
+            SpecificFieldsList.ItemsSource = info.Fields;
+        }
+        catch (Exception ex)
+        {
+            ClearTableSpecificDetails(ex.Message);
+        }
+    }
+
+    private void ClearTableSpecificDetails(string tableType)
+    {
+        SpecificTableSummary.Text = tableType;
+        SpecificFieldsList.ItemsSource = null;
     }
 
     private void AslList_SelectionChanged(object sender, SelectionChangedEventArgs e)

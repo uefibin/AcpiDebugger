@@ -51,9 +51,19 @@ public static class AcpiTableService
         "SSDT" => "Secondary System Description Table",
         "FACP" => "Fixed ACPI Description Table",
         "APIC" => "Multiple APIC Description Table",
+        "BGRT" => "Boot Graphics Resource Table",
+        "DBG2" => "Debug Port Table 2",
+        "DBGP" => "Debug Port Table",
         "HPET" => "High Precision Event Timer Table",
         "MCFG" => "PCI Express Memory Mapped Configuration",
+        "FPDT" => "Firmware Performance Data Table",
+        "LPIT" => "Low Power Idle Table",
+        "NHLT" => "Non-HD Audio Link Table",
+        "PHAT" => "Platform Health Assessment Table",
         "TPM2" => "Trusted Platform Module 2 Table",
+        "UEFI" => "UEFI ACPI Data Table",
+        "WSMT" => "Windows SMM Security Mitigations Table",
+        "XSDT" => "Extended System Description Table",
         _ => "ACPI firmware table"
     };
 }

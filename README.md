@@ -20,6 +20,7 @@ A modern Windows ACPI development and debugging tool for BIOS/UEFI engineers. It
 - iASL compilation, diagnostics, and error navigation
 - Batch decompilation and compilation with overall progress
 - ACPI table information viewer
+- Table-specific fields for BGRT, APIC, FADT, HPET, MCFG, TPM2, debug, performance, security, and root tables
 - Windows ACPI override loading
 - Administrator privilege and Test Mode detection
 - Responsive WPF interface

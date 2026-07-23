@@ -273,7 +273,9 @@
                     <Border Grid.Row="0" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
                         <TextBlock Text="Table Details" FontSize="14" FontWeight="SemiBold" Margin="15,0" VerticalAlignment="Center"/>
                     </Border>
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <TabControl Grid.Row="1" BorderThickness="0">
+                      <TabItem Header="Common">
+                       <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <Grid Margin="15">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="104"/>
@@ -310,7 +312,37 @@
                             <TextBlock Grid.Row="11" Text="Validated" Style="{StaticResource DetailLabel}"/>
                             <TextBlock Grid.Row="11" Grid.Column="1" x:Name="DetailValidated" Text="—" Style="{StaticResource DetailValue}"/>
                         </Grid>
-                    </ScrollViewer>
+                       </ScrollViewer>
+                      </TabItem>
+                      <TabItem Header="Table-specific">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                          <StackPanel Margin="15">
+                            <Grid Margin="0,0,0,2">
+                              <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="104"/><ColumnDefinition Width="*"/>
+                              </Grid.ColumnDefinitions>
+                              <TextBlock Text="Description" Style="{StaticResource DetailLabel}"/>
+                              <TextBlock Grid.Column="1" x:Name="SpecificTableSummary" Text="Select a table"
+                                         TextWrapping="Wrap" Style="{StaticResource DetailValue}"/>
+                            </Grid>
+                            <ItemsControl x:Name="SpecificFieldsList">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                  <Grid>
+                                    <Grid.ColumnDefinitions>
+                                      <ColumnDefinition Width="104"/><ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Name}" TextWrapping="Wrap" Style="{StaticResource DetailLabel}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap"
+                                               Style="{StaticResource DetailValue}"/>
+                                  </Grid>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                          </StackPanel>
+                        </ScrollViewer>
+                      </TabItem>
+                    </TabControl>
                     <Border Grid.Row="2" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="15">
                         <StackPanel>
                             <TextBlock Text="Override" FontWeight="SemiBold" Margin="0,0,0,5"/>
