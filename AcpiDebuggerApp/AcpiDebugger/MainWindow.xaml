@@ -39,6 +39,48 @@
             <Setter Property="Foreground" Value="{StaticResource Muted}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
+        <Style x:Key="FindIconButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Foreground" Value="#5F6368"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E6EAED"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="FindToggleButton" TargetType="ToggleButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Foreground" Value="#6B7075"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background" Value="#DCECEF"/>
+                    <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E6EAED"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="FindActionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
         <Style TargetType="ListBoxItem">
             <Setter Property="Padding" Value="10,6"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -183,30 +225,13 @@
             <!-- Editor and diagnostics -->
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="34"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="5"/>
                     <RowDefinition Height="210" MinHeight="100"/>
                 </Grid.RowDefinitions>
 
-                <Border x:Name="FindBar" Grid.Row="0" Background="#F8FAFC" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="8" Visibility="Collapsed">
-                    <WrapPanel>
-                        <TextBox x:Name="FindTextBox" Width="190" Height="30" Padding="7,0"
-                                 VerticalContentAlignment="Center" ToolTip="Find" KeyDown="FindTextBox_KeyDown"/>
-                        <TextBox x:Name="ReplaceTextBox" Width="170" Height="30" Padding="7,0" Margin="8,0,0,0"
-                                 VerticalContentAlignment="Center" ToolTip="Replace with"/>
-                        <Button Content="Previous" Margin="8,0,6,0" Padding="10,5" Click="FindPrevious_Click"/>
-                        <Button Content="Next" Margin="0,0,6,0" Padding="10,5" Click="FindNext_Click"/>
-                        <Button Content="Replace" Margin="0,0,6,0" Padding="10,5" Click="Replace_Click"/>
-                        <Button Content="Replace All" Margin="0,0,6,0" Padding="10,5" Click="ReplaceAll_Click"/>
-                        <Button Content="Find All Files" Margin="0,0,6,0" Padding="10,5" Click="FindAllFiles_Click"/>
-                        <Button Content="Close" Margin="0" Padding="10,5" Click="CloseFind_Click"/>
-                        <TextBlock x:Name="FindResultText" Margin="10,6,0,0" Foreground="{StaticResource Muted}"/>
-                    </WrapPanel>
-                </Border>
-
-                <Border Grid.Row="1" Background="#FAFBFC" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+                <Border Grid.Row="0" Background="#FAFBFC" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
                     <DockPanel>
                         <Border BorderBrush="{StaticResource Accent}" BorderThickness="0,0,0,2" Padding="15,0">
                             <StackPanel Orientation="Horizontal">
@@ -217,17 +242,97 @@
                     </DockPanel>
                 </Border>
 
-                <avalonEdit:TextEditor x:Name="Editor" Grid.Row="2"
-                                       FontFamily="Cascadia Mono,Consolas" FontSize="14"
-                                       ShowLineNumbers="True" WordWrap="False"
-                                       HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                                       Background="White" Foreground="#20242A"
-                                       LineNumbersForeground="#2387A5"
-                                       TextChanged="Editor_TextChanged"/>
+                <Grid Grid.Row="1" ClipToBounds="True">
+                    <avalonEdit:TextEditor x:Name="Editor"
+                                           FontFamily="Cascadia Mono,Consolas" FontSize="14"
+                                           ShowLineNumbers="True" WordWrap="False"
+                                           HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                           Background="White" Foreground="#20242A"
+                                           LineNumbersForeground="#2387A5"
+                                           TextChanged="Editor_TextChanged"/>
 
-                <GridSplitter Grid.Row="3" HorizontalAlignment="Stretch" Background="#D8DCE2"/>
+                    <Border x:Name="FindBar" Width="420" HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Margin="0,9,14,0" Background="#F3F3F3" BorderBrush="#D5D7DA"
+                            BorderThickness="1" CornerRadius="2" Visibility="Collapsed" Panel.ZIndex="10">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="14" ShadowDepth="3" Direction="270" Opacity="0.18" Color="#000000"/>
+                        </Border.Effect>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="38"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="30"/>
+                                <ColumnDefinition Width="30"/>
+                                <ColumnDefinition Width="30"/>
+                                <ColumnDefinition Width="52"/>
+                                <ColumnDefinition Width="30"/>
+                                <ColumnDefinition Width="30"/>
+                                <ColumnDefinition Width="30"/>
+                                <ColumnDefinition Width="30"/>
+                            </Grid.ColumnDefinitions>
 
-                <TabControl Grid.Row="4" x:Name="BottomTabs" BorderThickness="0,1,0,0" BorderBrush="{StaticResource Border}">
+                            <Button x:Name="FindExpandButton" Grid.Row="0" Grid.Column="0" Content="›"
+                                    Style="{StaticResource FindIconButton}" Click="ToggleReplace_Click" ToolTip="Show replace"/>
+                            <Border Grid.Row="0" Grid.Column="1" Height="30" Margin="3,4,3,4" Background="White"
+                                    BorderBrush="#E0E2E5" BorderThickness="1" CornerRadius="2">
+                                <TextBox x:Name="FindTextBox" Height="28" BorderThickness="0" Background="Transparent" Padding="7,0"
+                                         VerticalContentAlignment="Center" ToolTip="Find" KeyDown="FindTextBox_KeyDown"
+                                         TextChanged="FindTextBox_TextChanged"/>
+                            </Border>
+                            <ToggleButton x:Name="MatchCaseButton" Grid.Row="0" Grid.Column="2" Content="Aa"
+                                          Style="{StaticResource FindToggleButton}" Click="FindOption_Click"
+                                          ToolTip="Match case"/>
+                            <ToggleButton x:Name="WholeWordButton" Grid.Row="0" Grid.Column="3" Content="ab̲"
+                                          Style="{StaticResource FindToggleButton}" Click="FindOption_Click"
+                                          ToolTip="Match whole word"/>
+                            <ToggleButton x:Name="RegexButton" Grid.Row="0" Grid.Column="4" Content=".*"
+                                          Style="{StaticResource FindToggleButton}" Click="FindOption_Click"
+                                          ToolTip="Use regular expression"/>
+                            <TextBlock x:Name="FindResultText" Grid.Row="0" Grid.Column="5" Margin="0"
+                                       VerticalAlignment="Center" Foreground="#6B7075" TextAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <Button Grid.Row="0" Grid.Column="6" Content="↑" Style="{StaticResource FindIconButton}"
+                                    Click="FindPrevious_Click" ToolTip="Previous match"/>
+                            <Button Grid.Row="0" Grid.Column="7" Content="↓" Style="{StaticResource FindIconButton}"
+                                    Click="FindNext_Click" ToolTip="Next match"/>
+                            <Button Grid.Row="0" Grid.Column="8" Content="☰" Style="{StaticResource FindIconButton}"
+                                    Click="FindAllFiles_Click" ToolTip="Find in all files"/>
+                            <Button Grid.Row="0" Grid.Column="9" Content="×" Style="{StaticResource FindIconButton}"
+                                    FontSize="22" Click="CloseFind_Click" ToolTip="Close"/>
+
+                            <Grid x:Name="ReplaceRow" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="10"
+                                  Height="35" Visibility="Collapsed" Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="28"/>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="78"/>
+                                    <ColumnDefinition Width="84"/>
+                                    <ColumnDefinition Width="30"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="↳" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Foreground="#6B7075" FontSize="16"/>
+                                <Border Grid.Column="1" Height="30" Margin="3,0,3,0" Background="White"
+                                        BorderBrush="#E0E2E5" BorderThickness="1" CornerRadius="2">
+                                    <TextBox x:Name="ReplaceTextBox" Height="28" BorderThickness="0" Background="Transparent" Padding="7,0"
+                                             VerticalContentAlignment="Center" ToolTip="Replace with" KeyDown="ReplaceTextBox_KeyDown"/>
+                                </Border>
+                                <Button Grid.Column="3" Content="Replace" Style="{StaticResource FindActionButton}" Margin="2,0,3,0"
+                                        Click="Replace_Click"/>
+                                <Button Grid.Column="4" Content="Replace all" Style="{StaticResource FindActionButton}" Margin="0,0,3,0"
+                                        Click="ReplaceAll_Click"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <GridSplitter Grid.Row="2" HorizontalAlignment="Stretch" Background="#D8DCE2"/>
+
+                <TabControl Grid.Row="3" x:Name="BottomTabs" BorderThickness="0,1,0,0" BorderBrush="{StaticResource Border}">
                     <TabItem Header="Diagnostics">
                         <DataGrid x:Name="DiagnosticsGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
                                   GridLinesVisibility="Horizontal" BorderThickness="0" RowHeaderWidth="0"

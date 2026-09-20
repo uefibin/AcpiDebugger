@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Replaced the `acpidump.exe` dump dependency with native Windows ACPI table extraction, including all SSDT instances exposed under `HKLM\HARDWARE\ACPI`.
+
 ## 1.3.0 - 2026-07-23
 
 - Added a Table-specific details tab alongside the common ACPI header view.

@@ -14,8 +14,7 @@ public static class ToolLocatorService
         };
 
         return candidates.FirstOrDefault(path =>
-            File.Exists(Path.Combine(path, "iasl.exe")) &&
-            File.Exists(Path.Combine(path, "acpidump.exe"))) ?? string.Empty;
+            File.Exists(Path.Combine(path, "iasl.exe"))) ?? string.Empty;
     }
 
     public static ToolStatus GetStatus(string toolsDirectory)
@@ -38,5 +37,6 @@ public static class ToolLocatorService
 
 public sealed record ToolStatus(bool IaslAvailable, bool AcpiDumpAvailable, bool MicrosoftAslAvailable)
 {
-    public bool AcpicaAvailable => IaslAvailable && AcpiDumpAvailable;
+    public bool NativeAcpiAvailable => OperatingSystem.IsWindows();
+    public bool AcpicaAvailable => IaslAvailable;
 }

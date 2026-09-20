@@ -46,10 +46,9 @@ Load Override
 | 工具 | 来源 | 协议 | 用途 | 放置目录 |
 |---|---|---|---|---|
 | `iasl.exe` | [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | AML 反编译、ASL 编译 | `AcpiDebuggerApp/tools/iasl.exe` |
-| `acpidump.exe` | [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | 导出 Windows ACPI Table | `AcpiDebuggerApp/tools/acpidump.exe` |
 | `asl.exe` | [Microsoft ASL Compiler](https://learn.microsoft.com/windows-hardware/drivers/bringup/microsoft-asl-compiler) | Microsoft License | 加载 Windows ACPI Override Table | `AcpiDebuggerApp/tools/asl.exe` 或 `PATH` 中的目录 |
 
-本仓库不包含外部 EXE 文件。请从 ACPICA 下载 `iasl.exe` 和 `acpidump.exe`；需要加载 Override 时，请从 Windows Driver Kit（WDK）获取 `asl.exe`。使用或分发任何外部二进制文件前，请确认符合其许可证要求。
+Dump 使用 Windows 原生 ACPI 接口和 `HKLM\HARDWARE\ACPI` 注册表数据，完整读取 DSDT、FACS、FADT/XSDT 以及各个 SSDT 实例，不依赖 `acpidump.exe`。`iasl.exe` 仍用于 AML 反编译和 ASL 编译；加载 Override 时才需要 `asl.exe`。本仓库不包含外部 EXE 文件，请确认使用或分发任何外部二进制文件符合其许可证要求。
 
 目录结构：
 
@@ -59,7 +58,6 @@ AcpiDebuggerApp/
 │  └─ AcpiDebugger.csproj
 └─ tools/
    ├─ iasl.exe
-   ├─ acpidump.exe
    └─ asl.exe          # 仅加载 Override 时需要
 ```
 
@@ -67,7 +65,7 @@ AcpiDebuggerApp/
 
 | 组件 | 协议 | 用途 |
 |---|---|---|
-| [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | ACPI 工具链（`iasl` / `acpidump`） |
+| [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | ACPI ASL/AML 工具链（`iasl`） |
 | [AvalonEdit](https://github.com/icsharpcode/AvalonEdit) | MIT | ASL 代码编辑器 |
 | [.NET / WPF](https://github.com/dotnet/wpf) | MIT | 应用框架 |
 

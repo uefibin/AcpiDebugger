@@ -168,7 +168,7 @@ public static class AcpiLoader
                          + $"OEM Revision: 0x{originalRevision:X8} -> 0x{overrideRevision:X8}\n"
                          + $"Override file: {overridePath}\n"
                          + "IMPORTANT: Restart Windows before verifying the ACPI namespace. "
-                         + "A new acpidump taken before restart will still show the firmware table.\n\n"
+                         + "A new native ACPI dump taken before restart will still show the firmware table.\n\n"
                          + fullOutput;
                 }
                 else

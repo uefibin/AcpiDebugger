@@ -37,6 +37,9 @@ public partial class MainWindow : Window
     private readonly List<AcpiFileItem> _amlItems = new();
     private readonly List<string> _aslFiles = new();
     private DiagnosticLineRenderer? _diagnosticRenderer;
+    private bool _findMatchCase;
+    private bool _findWholeWord;
+    private bool _findUseRegex;
     private readonly DispatcherTimer _foldingTimer = new()
     {
         Interval = TimeSpan.FromMilliseconds(350)
@@ -108,7 +111,8 @@ public partial class MainWindow : Window
         if (!_toolService.IsAvailable)
         {
             MessageBox.Show(
-                "iasl.exe and acpidump.exe were not found in the tools directory.",
+                "iasl.exe was not found in the tools directory. Native Windows ACPI dumping does not require acpidump.exe, "
+                + "but iasl.exe is required for decompilation and compilation.",
                 "Tools missing", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
@@ -117,7 +121,8 @@ public partial class MainWindow : Window
     {
         ToolStatus status = ToolLocatorService.GetStatus(_toolsDir);
         ToolStatusText.Text = $"iasl: {(status.IaslAvailable ? "OK" : "Missing")}  "
-                            + $"acpidump: {(status.AcpiDumpAvailable ? "OK" : "Missing")}  "
+                            + $"native ACPI: {(status.NativeAcpiAvailable ? "OK" : "N/A")}  "
+                            + $"acpidump: {(status.AcpiDumpAvailable ? "optional" : "not needed")}  "
                             + $"asl: {(status.MicrosoftAslAvailable ? "OK" : "Missing")}";
         ToolStatusText.ToolTip = string.IsNullOrEmpty(_toolsDir) ? "Tools directory not found" : _toolsDir;
     }
@@ -171,7 +176,7 @@ public partial class MainWindow : Window
             int count = Directory.GetFiles(_workspaceDir, "*.dat").Length;
             Log(count > 0
                 ? $"Dump completed: {count} tables."
-                : "No tables were dumped. Run the application as administrator.");
+                : "No tables were dumped. Windows did not expose any ACPI tables to the native reader.");
         }
         catch (Exception ex)
         {
@@ -200,24 +205,29 @@ public partial class MainWindow : Window
         {
             SetBusy(true, $"Decompiling {filename}...");
             string target = Path.Combine(_workspaceDir, filename);
-            bool includeDsdt = !filename.Equals("dsdt.dat", StringComparison.OrdinalIgnoreCase);
+            IReadOnlyList<string> externalTables =
+                AcpiToolService.GetExternalTableNames(_workspaceDir, filename);
+            bool includeExternalTables = externalTables.Count > 0;
+            if (includeExternalTables)
+                Log($"{filename}: loading {externalTables.Count} external table(s): "
+                    + string.Join(", ", externalTables));
             ProcessResult result = await _toolService!.DecompileAsync(
                 _workspaceDir,
                 filename,
-                includeDsdt,
+                includeExternalTables,
                 _batchCancellation?.Token ?? CancellationToken.None);
             if (refresh || result.ExitCode != 0)
                 Log(result.Output);
 
             // Some SSDTs duplicate namespace objects already present in DSDT.
             // If external-reference loading conflicts, retry the table alone.
-            if (result.ExitCode != 0 && includeDsdt)
+            if (result.ExitCode != 0 && includeExternalTables)
             {
                 Log($"{filename}: external reference conflict; retrying standalone decompile.");
                 result = await _toolService.DecompileAsync(
                     _workspaceDir,
                     filename,
-                    includeDsdt: false,
+                    includeExternalTables: false,
                     _batchCancellation?.Token ?? CancellationToken.None);
                 if (refresh || result.ExitCode != 0)
                     Log(result.Output);
@@ -316,10 +326,68 @@ public partial class MainWindow : Window
                 _batchCancellation?.Token ?? CancellationToken.None);
 
             Log(result.Output);
+            foreach (string guidance in IaslDiagnosticService.GetCompilerGuidance(result.Output))
+                Log(guidance);
+
+            IReadOnlyList<ReservedNameRepair> reservedNameRepairs =
+                IaslDiagnosticService.CreateReservedNameRepairs(filePath, result.Output);
+            if (result.ExitCode != 0 && reservedNameRepairs.Count > 0)
+            {
+                string preview = string.Join(Environment.NewLine,
+                    reservedNameRepairs.Take(8).Select(item =>
+                        $"Line {item.Line}:\n- {item.Original.Trim()}\n+ {item.Updated.Trim()}"));
+                MessageBoxResult decision = MessageBox.Show(
+                    $"iASL reported Error 6105 for invalid reserved-name types. "
+                    + $"Apply {reservedNameRepairs.Count} suggested repair(s)?\n\n{preview}",
+                    "Review Error 6105 repairs",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+                if (decision == MessageBoxResult.Yes)
+                {
+                    IaslDiagnosticService.ApplyReservedNameRepairs(filePath, reservedNameRepairs);
+                    result = await _toolService.CompileAsync(
+                        _workspaceDir,
+                        Path.GetFileName(filePath),
+                        _batchCancellation?.Token ?? CancellationToken.None);
+                    Log(result.Output);
+                    foreach (string guidance in IaslDiagnosticService.GetCompilerGuidance(result.Output))
+                        Log(guidance);
+                    if (string.Equals(filePath, _currentFile, StringComparison.OrdinalIgnoreCase))
+                        LoadDocument(filePath);
+                }
+            }
+
+            IReadOnlyList<UnresolvedPathRepair> unresolvedPathRepairs =
+                IaslDiagnosticService.CreateUnresolvedPathRepairs(filePath, result.Output);
+            if (result.ExitCode != 0 && unresolvedPathRepairs.Count > 0)
+            {
+                string preview = string.Join(Environment.NewLine,
+                    unresolvedPathRepairs.Take(8).Select(item =>
+                        $"Line {item.Line}:\n- {item.Original.Trim()}\n+ {item.Updated.Trim()}"));
+                MessageBoxResult decision = MessageBox.Show(
+                    $"iASL reported Error 6161 for {unresolvedPathRepairs.Count} relative _SB path(s). "
+                    + $"Add the missing root prefix?\n\n{preview}",
+                    "Review Error 6161 path repairs",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+                if (decision == MessageBoxResult.Yes)
+                {
+                    IaslDiagnosticService.ApplyUnresolvedPathRepairs(filePath, unresolvedPathRepairs);
+                    result = await _toolService.CompileAsync(
+                        _workspaceDir,
+                        Path.GetFileName(filePath),
+                        _batchCancellation?.Token ?? CancellationToken.None);
+                    Log(result.Output);
+                    foreach (string guidance in IaslDiagnosticService.GetCompilerGuidance(result.Output))
+                        Log(guidance);
+                    if (string.Equals(filePath, _currentFile, StringComparison.OrdinalIgnoreCase))
+                        LoadDocument(filePath);
+                }
+            }
 
             IReadOnlyList<ExternalRepair> repairs =
                 IaslDiagnosticService.CreateExternalRepairs(filePath, result.Output);
-            if (result.ExitCode != 0 && repairs.Count > 0 && !_batchRunning)
+            if (result.ExitCode != 0 && repairs.Count > 0)
             {
                 string preview = string.Join(Environment.NewLine,
                     repairs.Take(8).Select(item =>
@@ -337,6 +405,8 @@ public partial class MainWindow : Window
                         Path.GetFileName(filePath),
                         _batchCancellation?.Token ?? CancellationToken.None);
                     Log(result.Output);
+                    foreach (string guidance in IaslDiagnosticService.GetCompilerGuidance(result.Output))
+                        Log(guidance);
                     if (string.Equals(filePath, _currentFile, StringComparison.OrdinalIgnoreCase))
                         LoadDocument(filePath);
                 }
@@ -742,14 +812,50 @@ public partial class MainWindow : Window
     private void ShowFind_Click(object sender, RoutedEventArgs e)
     {
         FindBar.Visibility = Visibility.Visible;
+        ReplaceRow.Visibility = Visibility.Collapsed;
+        FindExpandButton.Content = "›";
         FindTextBox.Focus();
         FindTextBox.SelectAll();
+        UpdateFindSummary();
     }
 
     private void CloseFind_Click(object sender, RoutedEventArgs e)
     {
         FindBar.Visibility = Visibility.Collapsed;
         Editor.Focus();
+    }
+
+    private void ToggleReplace_Click(object sender, RoutedEventArgs e)
+    {
+        bool isVisible = ReplaceRow.Visibility != Visibility.Visible;
+        ReplaceRow.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+        FindExpandButton.Content = isVisible ? "⌄" : "›";
+        FindExpandButton.ToolTip = isVisible ? "Hide replace" : "Show replace";
+        if (isVisible)
+            ReplaceTextBox.Focus();
+    }
+
+    private void FindOption_Click(object sender, RoutedEventArgs e)
+    {
+        _findMatchCase = MatchCaseButton.IsChecked == true;
+        _findWholeWord = WholeWordButton.IsChecked == true;
+        _findUseRegex = RegexButton.IsChecked == true;
+        UpdateFindSummary();
+    }
+
+    private void FindTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (FindBar.Visibility == Visibility.Visible)
+            UpdateFindSummary();
+    }
+
+    private void ReplaceTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            Replace_Click(sender, e);
+            e.Handled = true;
+        }
     }
 
     private void FindNext_Click(object sender, RoutedEventArgs e) => FindText(true);
@@ -771,7 +877,13 @@ public partial class MainWindow : Window
             foreach (string line in File.ReadLines(file))
             {
                 lineNumber++;
-                if (line.Contains(query, StringComparison.OrdinalIgnoreCase))
+                if (!TryGetFindMatches(line, query, out List<FindMatch> matches))
+                {
+                    FindResultText.Text = "Invalid pattern";
+                    return;
+                }
+
+                if (matches.Count > 0)
                 {
                     results.Add(new SearchResult(
                         Path.GetFileName(file),
@@ -799,15 +911,21 @@ public partial class MainWindow : Window
 
         DocumentLine line = Editor.Document.GetLineByNumber(result.Line);
         string lineText = Editor.Document.GetText(line);
-        int index = lineText.IndexOf(FindTextBox.Text, StringComparison.OrdinalIgnoreCase);
-        if (index >= 0)
-            Editor.Select(line.Offset + index, FindTextBox.Text.Length);
+        if (TryGetFindMatches(lineText, FindTextBox.Text, out List<FindMatch> matches)
+            && matches.Count > 0)
+        {
+            FindMatch match = matches[0];
+            Editor.Select(line.Offset + match.Index, match.Length);
+        }
     }
 
     private void Replace_Click(object sender, RoutedEventArgs e)
     {
-        if (Editor.SelectionLength > 0 &&
-            Editor.SelectedText.Equals(FindTextBox.Text, StringComparison.OrdinalIgnoreCase))
+        if (Editor.SelectionLength > 0
+            && TryGetFindMatches(Editor.SelectedText, FindTextBox.Text, out List<FindMatch> matches)
+            && matches.Count == 1
+            && matches[0].Index == 0
+            && matches[0].Length == Editor.SelectionLength)
         {
             int start = Editor.SelectionStart;
             Editor.Document.Replace(start, Editor.SelectionLength, ReplaceTextBox.Text);
@@ -821,17 +939,20 @@ public partial class MainWindow : Window
         string find = FindTextBox.Text;
         if (string.IsNullOrEmpty(find)) return;
 
+        if (!TryGetFindMatches(Editor.Text, find, out List<FindMatch> matches))
+        {
+            FindResultText.Text = "Invalid pattern";
+            return;
+        }
+
         int count = 0;
-        int offset = 0;
         Editor.Document.BeginUpdate();
         try
         {
-            while (offset <= Editor.Document.TextLength)
+            for (int index = matches.Count - 1; index >= 0; index--)
             {
-                int index = Editor.Text.IndexOf(find, offset, StringComparison.OrdinalIgnoreCase);
-                if (index < 0) break;
-                Editor.Document.Replace(index, find.Length, ReplaceTextBox.Text);
-                offset = index + ReplaceTextBox.Text.Length;
+                FindMatch match = matches[index];
+                Editor.Document.Replace(match.Index, match.Length, ReplaceTextBox.Text);
                 count++;
             }
         }
@@ -847,30 +968,115 @@ public partial class MainWindow : Window
         string query = FindTextBox.Text;
         if (string.IsNullOrEmpty(query)) return;
 
-        string text = Editor.Text;
-        int start = forward ? Editor.SelectionStart + Editor.SelectionLength : Editor.SelectionStart - 1;
-        int index = forward
-            ? text.IndexOf(query, Math.Clamp(start, 0, text.Length), StringComparison.OrdinalIgnoreCase)
-            : text.LastIndexOf(query, Math.Clamp(start, 0, Math.Max(0, text.Length - 1)), StringComparison.OrdinalIgnoreCase);
-
-        if (index < 0)
+        if (!TryGetFindMatches(Editor.Text, query, out List<FindMatch> matches))
         {
-            index = forward
-                ? text.IndexOf(query, StringComparison.OrdinalIgnoreCase)
-                : text.LastIndexOf(query, StringComparison.OrdinalIgnoreCase);
+            FindResultText.Text = "Invalid pattern";
+            return;
         }
 
-        if (index >= 0)
+        if (matches.Count == 0)
         {
-            Editor.Select(index, query.Length);
-            Editor.ScrollToLine(Editor.Document.GetLineByOffset(index).LineNumber);
-            FindResultText.Text = $"Line {Editor.Document.GetLineByOffset(index).LineNumber}";
+            FindResultText.Text = "No matches";
+            return;
+        }
+
+        int matchIndex;
+        if (forward)
+        {
+            int caret = Editor.SelectionStart + Editor.SelectionLength;
+            matchIndex = matches.FindIndex(match => match.Index >= caret);
+            if (matchIndex < 0) matchIndex = 0;
         }
         else
         {
+            int caret = Editor.SelectionStart - 1;
+            matchIndex = matches.FindLastIndex(match => match.Index <= caret);
+            if (matchIndex < 0) matchIndex = matches.Count - 1;
+        }
+
+        FindMatch selected = matches[matchIndex];
+        Editor.Select(selected.Index, selected.Length);
+        Editor.ScrollToLine(Editor.Document.GetLineByOffset(selected.Index).LineNumber);
+        FindResultText.Text = $"{matchIndex + 1} of {matches.Count}";
+    }
+
+    private void UpdateFindSummary()
+    {
+        string query = FindTextBox.Text;
+        if (string.IsNullOrEmpty(query))
+        {
+            FindResultText.Text = string.Empty;
+            return;
+        }
+
+        if (!TryGetFindMatches(Editor.Text, query, out List<FindMatch> matches))
+        {
+            FindResultText.Text = "Invalid pattern";
+            return;
+        }
+
+        if (matches.Count == 0)
+        {
             FindResultText.Text = "No matches";
+            return;
+        }
+
+        int selectedIndex = matches.FindIndex(match =>
+            match.Index == Editor.SelectionStart && match.Length == Editor.SelectionLength);
+        FindResultText.Text = selectedIndex >= 0
+            ? $"{selectedIndex + 1} of {matches.Count}"
+            : $"{matches.Count} matches";
+    }
+
+    private bool TryGetFindMatches(string text, string query, out List<FindMatch> matches)
+    {
+        matches = new List<FindMatch>();
+        if (string.IsNullOrEmpty(query)) return true;
+
+        try
+        {
+            if (_findUseRegex)
+            {
+                RegexOptions options = _findMatchCase ? RegexOptions.None : RegexOptions.IgnoreCase;
+                foreach (Match match in Regex.Matches(text, query, options))
+                {
+                    if (match.Success && (!_findWholeWord || IsWholeWord(text, match.Index, match.Length)))
+                        matches.Add(new FindMatch(match.Index, match.Length));
+                }
+                return true;
+            }
+
+            StringComparison comparison = _findMatchCase
+                ? StringComparison.Ordinal
+                : StringComparison.OrdinalIgnoreCase;
+            int offset = 0;
+            while (offset <= text.Length)
+            {
+                int index = text.IndexOf(query, offset, comparison);
+                if (index < 0) break;
+                if (!_findWholeWord || IsWholeWord(text, index, query.Length))
+                    matches.Add(new FindMatch(index, query.Length));
+                offset = index + Math.Max(1, query.Length);
+            }
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            matches.Clear();
+            return false;
         }
     }
+
+    private static bool IsWholeWord(string text, int index, int length)
+    {
+        bool leftBoundary = index == 0 || !IsWordCharacter(text[index - 1]);
+        int end = index + length;
+        bool rightBoundary = end >= text.Length || !IsWordCharacter(text[end]);
+        return leftBoundary && rightBoundary;
+    }
+
+    private static bool IsWordCharacter(char value) =>
+        char.IsLetterOrDigit(value) || value == '_';
 
     private void FindTextBox_KeyDown(object sender, KeyEventArgs e)
     {
@@ -1170,6 +1376,8 @@ public partial class MainWindow : Window
     }
 
     private sealed record TableNode(string Filename, bool IsSource, AcpiFileItem? AmlItem);
+
+    private readonly record struct FindMatch(int Index, int Length);
 
     private sealed record AcpiFileItem(string Filename, string Description)
     {

@@ -46,10 +46,9 @@ Load Override
 | Tool | Source | License | Purpose | Required location |
 |---|---|---|---|---|
 | `iasl.exe` | [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | AML disassembly and ASL compilation | `AcpiDebuggerApp/tools/iasl.exe` |
-| `acpidump.exe` | [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | Dump ACPI tables from Windows | `AcpiDebuggerApp/tools/acpidump.exe` |
 | `asl.exe` | [Microsoft ASL compiler](https://learn.microsoft.com/windows-hardware/drivers/bringup/microsoft-asl-compiler) | Microsoft license | Load ACPI override tables into Windows | `AcpiDebuggerApp/tools/asl.exe` or a directory in `PATH` |
 
-External executables are not included in this repository. Download `iasl.exe` and `acpidump.exe` from ACPICA, and obtain `asl.exe` from the Windows Driver Kit (WDK) when override loading is required. Verify that use and redistribution of every external binary complies with its license.
+Dumping uses the native Windows ACPI interfaces and the `HKLM\HARDWARE\ACPI` registry data, including every DSDT, FACS, FADT/XSDT, and SSDT instance, so `acpidump.exe` is not required. `iasl.exe` is still used for AML disassembly and ASL compilation; `asl.exe` is only needed for loading ACPI overrides. External executables are not included in this repository. Verify that use and redistribution of every external binary complies with its license.
 
 Expected structure:
 
@@ -59,7 +58,6 @@ AcpiDebuggerApp/
 │  └─ AcpiDebugger.csproj
 └─ tools/
    ├─ iasl.exe
-   ├─ acpidump.exe
    └─ asl.exe          # optional unless loading overrides
 ```
 
@@ -67,7 +65,7 @@ AcpiDebuggerApp/
 
 | Component | License | Purpose |
 |---|---|---|
-| [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | ACPI toolchain (`iasl` / `acpidump`) |
+| [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | ACPI ASL/AML toolchain (`iasl`) |
 | [AvalonEdit](https://github.com/icsharpcode/AvalonEdit) | MIT | ASL code editor |
 | [.NET / WPF](https://github.com/dotnet/wpf) | MIT | Application framework |
 
