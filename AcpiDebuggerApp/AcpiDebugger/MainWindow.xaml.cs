@@ -21,6 +21,10 @@ namespace AcpiDebugger;
 
 public partial class MainWindow : Window
 {
+    private const int MaxOutputPreviewCharacters = 48000;
+    private const int OutputPreviewHeadCharacters = 32000;
+    private const int OutputPreviewTailCharacters = 12000;
+
     private readonly string _workspaceDir;
     private string _toolsDir = string.Empty;
     private AcpiToolService? _toolService;
@@ -71,7 +75,7 @@ public partial class MainWindow : Window
         BottomTestModeDot.Fill = testMode ? Brushes.ForestGreen : Brushes.IndianRed;
 
         Editor.TextArea.Caret.PositionChanged += (_, _) => UpdateCaretStatus();
-        Log($"Ready. Tools: {(string.IsNullOrEmpty(_toolsDir) ? "not found" : _toolsDir)}");
+        Log($"Ready. ACPICA backend: {(_toolService?.IsAvailable == true ? "integrated" : "not found")}");
         Log("AvalonEdit initialized with native WPF integration.");
     }
 
@@ -106,24 +110,24 @@ public partial class MainWindow : Window
     {
         _toolsDir = ToolLocatorService.LocateToolsDirectory();
         _toolService = new AcpiToolService(_toolsDir);
-        _overrideService = new AcpiOverrideService(_toolsDir);
+        _overrideService = new AcpiOverrideService();
 
         if (!_toolService.IsAvailable)
         {
             MessageBox.Show(
-                "iasl.exe was not found in the tools directory. Native Windows ACPI dumping does not require acpidump.exe, "
-                + "but iasl.exe is required for decompilation and compilation.",
-                "Tools missing", MessageBoxButton.OK, MessageBoxImage.Warning);
+                "The integrated ACPICA backend was not found for this architecture. "
+                + "Rebuild the project to produce AcpiCompilerHost.dll.",
+                "ACPICA backend missing", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
     private void UpdateToolStatus()
     {
         ToolStatus status = ToolLocatorService.GetStatus(_toolsDir);
-        ToolStatusText.Text = $"iasl: {(status.IaslAvailable ? "OK" : "Missing")}  "
+        ToolStatusText.Text = $"ACPICA: {(status.AcpicaAvailable ? "integrated" : "Missing")}  "
                             + $"native ACPI: {(status.NativeAcpiAvailable ? "OK" : "N/A")}  "
                             + $"acpidump: {(status.AcpiDumpAvailable ? "optional" : "not needed")}  "
-                            + $"asl: {(status.MicrosoftAslAvailable ? "OK" : "Missing")}";
+                            + "override: integrated";
         ToolStatusText.ToolTip = string.IsNullOrEmpty(_toolsDir) ? "Tools directory not found" : _toolsDir;
     }
 
@@ -489,13 +493,25 @@ public partial class MainWindow : Window
 
             if (result.StartsWith("Success:", StringComparison.Ordinal))
             {
-                MessageBox.Show(
+                MessageBoxResult restart = MessageBox.Show(
                     "The ACPI override has been staged in the registry.\n\n"
                   + "Restart Windows before checking Device Manager or running Dump again. "
-                  + "The live ACPI namespace is not replaced immediately.",
+                  + "The live ACPI namespace is not replaced immediately.\n\n"
+                  + "Restart Windows now?",
                     "Restart required",
-                    MessageBoxButton.OK,
+                    MessageBoxButton.YesNo,
                     MessageBoxImage.Information);
+
+                if (restart == MessageBoxResult.Yes)
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "shutdown.exe",
+                        Arguments = "/r /t 5 /c \"ACPI override staged; restarting Windows.\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                }
             }
         }
         catch (Exception ex)
@@ -510,21 +526,10 @@ public partial class MainWindow : Window
 
     private async void RemoveOverride_Click(object sender, RoutedEventArgs e)
     {
-        if (AmlList.SelectedItem is not AcpiFileItem item)
-        {
-            MessageBox.Show(
-                "Select the AML table whose override should be removed.",
-                "No selection",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
-
         try
         {
-            SetBusy(true, $"Removing override for {item.Filename}...");
-            string result = await _overrideService!.RemoveAsync(
-                Path.Combine(_workspaceDir, item.Filename));
+            SetBusy(true, "Removing all ACPI overrides...");
+            string result = await _overrideService!.RemoveAllAsync();
             Log(result);
 
             if (result.StartsWith("Success:", StringComparison.Ordinal))
@@ -1247,8 +1252,10 @@ public partial class MainWindow : Window
 
     private bool EnsureTools()
     {
-        if (!string.IsNullOrEmpty(_toolsDir)) return true;
-        MessageBox.Show("ACPICA tools were not found.", "Tools missing");
+        if (_toolService?.IsAvailable == true) return true;
+        MessageBox.Show(
+            "The integrated ACPICA backend was not found for this architecture.",
+            "ACPICA backend missing");
         return false;
     }
 
@@ -1324,13 +1331,32 @@ public partial class MainWindow : Window
 
         BottomTabs.SelectedItem = OutputTab;
 
-        string line = $"[{DateTime.Now:HH:mm:ss}] {message.TrimEnd()}";
+        string displayMessage = LimitOutputPreview(message);
+        string line = $"[{DateTime.Now:HH:mm:ss}] {displayMessage.TrimEnd()}";
         OutputBox.Document.Blocks.Add(new Paragraph(new Run(line))
         {
             Margin = new Thickness(0),
             Foreground = new SolidColorBrush(Color.FromRgb(31, 41, 55))
         });
         OutputBox.ScrollToEnd();
+    }
+
+    private static string LimitOutputPreview(string message)
+    {
+        if (message.Length <= MaxOutputPreviewCharacters)
+            return message;
+
+        int headLength = Math.Min(OutputPreviewHeadCharacters, message.Length);
+        int tailLength = Math.Min(OutputPreviewTailCharacters, message.Length - headLength);
+        int omitted = message.Length - headLength - tailLength;
+        return message[..headLength]
+            + Environment.NewLine
+            + Environment.NewLine
+            + $"[Output preview truncated: {omitted:N0} characters omitted. "
+            + "See the Diagnostics tab for parsed compiler errors.]"
+            + Environment.NewLine
+            + Environment.NewLine
+            + message[^tailLength..];
     }
 
     private void ShowError(string title, Exception exception)

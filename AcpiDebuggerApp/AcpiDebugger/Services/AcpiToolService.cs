@@ -1,19 +1,16 @@
 using AcpiDebugger.Models;
-using System.Diagnostics;
 using System.IO;
 
 namespace AcpiDebugger.Services;
 
 public sealed class AcpiToolService
 {
-    private readonly string _toolsDirectory;
-
     public AcpiToolService(string toolsDirectory)
     {
-        _toolsDirectory = toolsDirectory;
+        _ = toolsDirectory;
     }
 
-    public bool IsAvailable => ToolLocatorService.GetStatus(_toolsDirectory).IaslAvailable;
+    public bool IsAvailable => AcpiNativeCompilerService.IsAvailable;
 
     public Task<ProcessResult> DumpAsync(string workspaceDirectory, CancellationToken cancellationToken = default) =>
         Task.Run(() => NativeAcpiDumpService.Dump(workspaceDirectory), cancellationToken);
@@ -28,11 +25,12 @@ public sealed class AcpiToolService
         IReadOnlyList<string> externalTables = includeExternalTables
             ? GetExternalTableNames(workspaceDirectory, fileName)
             : Array.Empty<string>();
-        string externalArgs = externalTables.Count == 0
-            ? string.Empty
-            : "-e " + string.Join(" ", externalTables.Select(name => $"\"{name}\"")) + " ";
-        string args = $"{externalArgs}-d \"{target}\"";
-        return RunAsync(Path.Combine(_toolsDirectory, "iasl.exe"), args, workspaceDirectory, cancellationToken);
+        string[] externalPaths = externalTables
+            .Select(name => Path.Combine(workspaceDirectory, name))
+            .ToArray();
+        return RunNativeAsync(
+            () => AcpiNativeCompilerService.Disassemble(target, externalPaths, CreateLogPath()),
+            cancellationToken);
     }
 
     public static IReadOnlyList<string> GetExternalTableNames(
@@ -67,50 +65,24 @@ public sealed class AcpiToolService
         string workspaceDirectory,
         string fileName,
         CancellationToken cancellationToken = default) =>
-        RunAsync(
-            Path.Combine(_toolsDirectory, "iasl.exe"),
-            $"-ve \"{fileName}\"",
-            workspaceDirectory,
+        RunNativeAsync(
+            () => AcpiNativeCompilerService.Compile(
+                Path.Combine(workspaceDirectory, fileName),
+                CreateLogPath()),
             cancellationToken);
 
-    private static async Task<ProcessResult> RunAsync(
-        string fileName,
-        string arguments,
-        string workingDirectory,
+    private static Task<ProcessResult> RunNativeAsync(
+        Func<ProcessResult> operation,
         CancellationToken cancellationToken)
     {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = fileName,
-                Arguments = arguments,
-                WorkingDirectory = workingDirectory,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            }
-        };
+        return Task.Run(operation, cancellationToken);
+    }
 
-        process.Start();
-        Task<string> outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        Task<string> errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-        try
-        {
-            await process.WaitForExitAsync(cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-            throw;
-        }
-
-        return new ProcessResult(
-            process.ExitCode,
-            (await outputTask) + Environment.NewLine + (await errorTask));
+    private static string CreateLogPath()
+    {
+        return Path.Combine(
+            Path.GetTempPath(),
+            $"AcpiDebugger-{Guid.NewGuid():N}.log");
     }
 
     private static int GetTableFileOrder(string name)

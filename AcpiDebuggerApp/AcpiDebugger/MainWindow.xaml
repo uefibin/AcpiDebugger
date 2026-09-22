@@ -454,7 +454,7 @@
                             <TextBlock Text="Load this table as an override in Windows test mode." Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                             <StackPanel Orientation="Horizontal">
                                 <Button Content="Load override…" Margin="0,0,8,0" Click="LoadToSystem_Click"/>
-                                <Button Content="Remove override" Click="RemoveOverride_Click"/>
+                                <Button Content="Remove all overrides" Click="RemoveOverride_Click"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>

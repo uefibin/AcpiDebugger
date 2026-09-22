@@ -17,7 +17,7 @@ A modern Windows ACPI development and debugging tool for BIOS/UEFI engineers. It
 - Browse ACPI tables (DSDT / SSDT)
 - AML-to-ASL decompilation
 - ASL editor with syntax highlighting
-- iASL compilation, diagnostics, and error navigation
+- Integrated ACPICA compilation/decompilation, diagnostics, and error navigation
 - Batch decompilation and compilation with overall progress
 - ACPI table information viewer
 - Table-specific fields for BGRT, APIC, FADT, HPET, MCFG, TPM2, debug, performance, security, and root tables
@@ -41,14 +41,13 @@ Load Override
 
 > Loading an override changes Windows ACPI configuration. Use it only on a test system and make sure you have a recovery method available.
 
-## External Tool Dependencies
+## ACPICA Integration and External Dependencies
 
-| Tool | Source | License | Purpose | Required location |
-|---|---|---|---|---|
-| `iasl.exe` | [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | AML disassembly and ASL compilation | `AcpiDebuggerApp/tools/iasl.exe` |
-| `asl.exe` | [Microsoft ASL compiler](https://learn.microsoft.com/windows-hardware/drivers/bringup/microsoft-asl-compiler) | Microsoft license | Load ACPI override tables into Windows | `AcpiDebuggerApp/tools/asl.exe` or a directory in `PATH` |
+| Component | Source | License | Purpose |
+|---|---|---|---|
+| ACPICA native backend | [open-acpica/acpica](https://github.com/open-acpica/acpica) | BSD-3-Clause / GPL-2.0-only | In-process AML disassembly and ASL compilation | `third_party/acpica` |
 
-Dumping uses the native Windows ACPI interfaces and the `HKLM\HARDWARE\ACPI` registry data, including every DSDT, FACS, FADT/XSDT, and SSDT instance, so `acpidump.exe` is not required. `iasl.exe` is still used for AML disassembly and ASL compilation; `asl.exe` is only needed for loading ACPI overrides. External executables are not included in this repository. Verify that use and redistribution of every external binary complies with its license.
+Dumping uses the native Windows ACPI interfaces and the `HKLM\HARDWARE\ACPI` registry data, including every DSDT, FACS, FADT/XSDT, and SSDT instance, so `acpidump.exe` is not required. AML disassembly and ASL compilation run through the in-process ACPICA native backend. Load Override uses the integrated registry-delta loader and does not require Microsoft `asl.exe`; it validates the source and live firmware tables before staging the override.
 
 Expected structure:
 
@@ -56,16 +55,15 @@ Expected structure:
 AcpiDebuggerApp/
 ├─ AcpiDebugger/
 │  └─ AcpiDebugger.csproj
-└─ tools/
-   ├─ iasl.exe
-   └─ asl.exe          # optional unless loading overrides
+third_party/
+└─ acpica/              # ACPICA source and native backend project
 ```
 
 ## Open Source Components
 
 | Component | License | Purpose |
 |---|---|---|
-| [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | ACPI ASL/AML toolchain (`iasl`) |
+| [ACPICA](https://github.com/open-acpica/acpica) | BSD-3-Clause / GPL-2.0-only | Integrated ACPI ASL/AML compiler and disassembler |
 | [AvalonEdit](https://github.com/icsharpcode/AvalonEdit) | MIT | ASL code editor |
 | [.NET / WPF](https://github.com/dotnet/wpf) | MIT | Application framework |
 
@@ -81,8 +79,11 @@ From the repository root:
 
 ```powershell
 dotnet restore .\AcpiDebuggerApp\AcpiDebugger\AcpiDebugger.csproj
+msbuild .\third_party\acpica\integration\AcpiCompilerHost.vcxproj /p:Configuration=Release /p:Platform=x64
 dotnet build .\AcpiDebuggerApp\AcpiDebugger\AcpiDebugger.csproj -c Release
 ```
+
+For an ARM64 test build, use `Platform=ARM64` for the native project and `dotnet build -r win-arm64` for the WPF application.
 
 Run the application as administrator when dumping tables or loading overrides.
 

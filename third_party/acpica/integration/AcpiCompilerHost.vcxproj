@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B6C26C8C-EA5E-4C0F-879C-CB669034BF17}</ProjectGuid>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros" />
+
+  <PropertyGroup>
+    <OutDir>$(MSBuildThisFileDirectory)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)obj\$(Platform)\$(Configuration)\</IntDir>
+    <TargetName>AcpiCompilerHost</TargetName>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <RuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreaded</RuntimeLibrary>
+      <RuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebug</RuntimeLibrary>
+      <Optimization Condition="'$(Configuration)'=='Release'">MaxSpeed</Optimization>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <FunctionLevelLinking>false</FunctionLevelLinking>
+      <WarningLevel>Level3</WarningLevel>
+      <DisableSpecificWarnings>4100;4127;4244;4267;4310;4389;4456;4457;4458;4459;4706;4996;4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>..\source\include;..\source\compiler;..\generate\msvc2017;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN64;__STDC__;YY_NEVER_INTERACTIVE;YY_NO_UNISTD_H;ACPI_ASL_COMPILER;ACPI_DISASSEMBLER;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;exit=AcpiCompilerHostExit;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <CompileAs>CompileAsC</CompileAs>
+      <ConformanceMode>false</ConformanceMode>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalOptions>/wd4819 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ImportLibrary>$(OutDir)AcpiCompilerHost.lib</ImportLibrary>
+      <AdditionalDependencies>user32.lib;advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="..\source\common\*.c" Exclude="..\source\common\acgetline.c" />
+    <ClCompile Include="..\source\compiler\*.c" Exclude="..\source\compiler\*.tab.c;..\source\compiler\lex.yy.c" />
+    <ClCompile Include="..\source\components\debugger\dbfileio.c" />
+    <ClCompile Include="..\source\components\disassembler\*.c" />
+    <ClCompile Include="..\source\components\dispatcher\*.c" Exclude="..\source\components\dispatcher\dsdebug.c;..\source\components\dispatcher\dsinit.c;..\source\components\dispatcher\dsmethod.c;..\source\components\dispatcher\dsmthdat.c" />
+    <ClCompile Include="..\source\components\executer\*.c" Exclude="..\source\components\executer\exconfig.c;..\source\components\executer\exdebug.c;..\source\components\executer\exfield.c;..\source\components\executer\exfldio.c;..\source\components\executer\exserial.c;..\source\components\executer\extrace.c" />
+    <ClCompile Include="..\source\components\namespace\*.c" Exclude="..\source\components\namespace\nsarguments.c;..\source\components\namespace\nsconvert.c;..\source\components\namespace\nsdumpdv.c;..\source\components\namespace\nseval.c;..\source\components\namespace\nsinit.c;..\source\components\namespace\nsload.c;..\source\components\namespace\nspredef.c;..\source\components\namespace\nsprepkg.c;..\source\components\namespace\nsrepair.c;..\source\components\namespace\nsrepair2.c;..\source\components\namespace\nsxfeval.c;..\source\components\namespace\nsxfname.c" />
+    <ClCompile Include="..\source\components\parser\*.c" Exclude="..\source\components\parser\psxface.c" />
+    <ClCompile Include="..\source\components\tables\*.c" Exclude="..\source\components\tables\tbfind.c;..\source\components\tables\tbxfroot.c" />
+    <ClCompile Include="..\source\components\utilities\*.c" Exclude="..\source\components\utilities\utclib.c;..\source\components\utilities\uteval.c;..\source\components\utilities\utids.c;..\source\components\utilities\utosi.c;..\source\components\utilities\utprint.c;..\source\components\utilities\uttrack.c;..\source\components\utilities\utxfinit.c;..\source\components\utilities\utxfmutex.c" />
+    <ClCompile Include="..\source\os_specific\service_layers\oswindir.c" />
+    <ClCompile Include="..\source\os_specific\service_layers\oswintbl.c" />
+    <ClCompile Include="..\source\os_specific\service_layers\oswinxf.c" />
+    <ClCompile Include="..\generate\msvc2017\aslcompiler.l.c" />
+    <ClCompile Include="..\generate\msvc2017\aslcompiler.y.c" />
+    <ClCompile Include="..\generate\msvc2017\dtcompilerparser.l.c" />
+    <ClCompile Include="..\generate\msvc2017\dtcompilerparser.y.c" />
+    <ClCompile Include="..\generate\msvc2017\dtparser.l.c" />
+    <ClCompile Include="..\generate\msvc2017\dtparser.y.c" />
+    <ClCompile Include="..\generate\msvc2017\prparser.l.c" />
+    <ClCompile Include="..\generate\msvc2017\prparser.y.c" />
+    <ClCompile Include="AcpiCompilerHost.c" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClInclude Include="..\source\include\*.h" />
+    <ClInclude Include="..\source\compiler\*.h" />
+    <ClInclude Include="..\source\components\*.h" />
+    <ClInclude Include="..\generate\msvc2017\*.h" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

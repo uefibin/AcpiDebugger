@@ -17,7 +17,7 @@ ACPI Debugger 是一款面向 BIOS/UEFI 工程师的 Windows ACPI 开发与调�
 - 浏览 ACPI Table（DSDT / SSDT）
 - AML 反编译为 ASL
 - ASL 代码编辑与语法高亮
-- iASL 编译、诊断解析和错误定位
+- 内置 ACPICA 编译/反编译、诊断解析和错误定位
 - 批量反编译 / 编译及整体进度显示
 - ACPI Table 信息查看
 - 在 Table Details 面板解析并显示 BGRT、APIC、FADT、HPET、MCFG、TPM2、调试、性能、安全及根表专有字段
@@ -41,14 +41,13 @@ Load Override
 
 > 加载 Override 会修改 Windows 的 ACPI 配置，请仅在测试机器上操作，并提前准备系统恢复方案。
 
-## 外部工具依赖
+## ACPICA 集成与外部依赖
 
-| 工具 | 来源 | 协议 | 用途 | 放置目录 |
-|---|---|---|---|---|
-| `iasl.exe` | [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | AML 反编译、ASL 编译 | `AcpiDebuggerApp/tools/iasl.exe` |
-| `asl.exe` | [Microsoft ASL Compiler](https://learn.microsoft.com/windows-hardware/drivers/bringup/microsoft-asl-compiler) | Microsoft License | 加载 Windows ACPI Override Table | `AcpiDebuggerApp/tools/asl.exe` 或 `PATH` 中的目录 |
+| 组件 | 来源 | 协议 | 用途 |
+|---|---|---|---|
+| ACPICA native backend | [open-acpica/acpica](https://github.com/open-acpica/acpica) | BSD-3-Clause / GPL-2.0-only | 进程内 AML 反编译、ASL 编译 | `third_party/acpica` |
 
-Dump 使用 Windows 原生 ACPI 接口和 `HKLM\HARDWARE\ACPI` 注册表数据，完整读取 DSDT、FACS、FADT/XSDT 以及各个 SSDT 实例，不依赖 `acpidump.exe`。`iasl.exe` 仍用于 AML 反编译和 ASL 编译；加载 Override 时才需要 `asl.exe`。本仓库不包含外部 EXE 文件，请确认使用或分发任何外部二进制文件符合其许可证要求。
+Dump 使用 Windows 原生 ACPI 接口和 `HKLM\HARDWARE\ACPI` 注册表数据，完整读取 DSDT、FACS、FADT/XSDT 以及各个 SSDT 实例，不依赖 `acpidump.exe`。AML 反编译和 ASL 编译由项目内置的 ACPICA native backend 完成。Load Override 使用内置注册表差分加载器，不再依赖微软 `asl.exe`；写入前会验证修改表和实时固件表。
 
 目录结构：
 
@@ -56,16 +55,15 @@ Dump 使用 Windows 原生 ACPI 接口和 `HKLM\HARDWARE\ACPI` 注册表数据�
 AcpiDebuggerApp/
 ├─ AcpiDebugger/
 │  └─ AcpiDebugger.csproj
-└─ tools/
-   ├─ iasl.exe
-   └─ asl.exe          # 仅加载 Override 时需要
+third_party/
+└─ acpica/              # ACPICA 源码与 native DLL 工程
 ```
 
 ## 开源组件
 
 | 组件 | 协议 | 用途 |
 |---|---|---|
-| [ACPICA](https://github.com/acpica/acpica) | BSD-3-Clause | ACPI ASL/AML 工具链（`iasl`） |
+| [ACPICA](https://github.com/open-acpica/acpica) | BSD-3-Clause / GPL-2.0-only | 内置 ACPI ASL/AML 编译与反编译后端 |
 | [AvalonEdit](https://github.com/icsharpcode/AvalonEdit) | MIT | ASL 代码编辑器 |
 | [.NET / WPF](https://github.com/dotnet/wpf) | MIT | 应用框架 |
 
@@ -81,8 +79,11 @@ AcpiDebuggerApp/
 
 ```powershell
 dotnet restore .\AcpiDebuggerApp\AcpiDebugger\AcpiDebugger.csproj
+msbuild .\third_party\acpica\integration\AcpiCompilerHost.vcxproj /p:Configuration=Release /p:Platform=x64
 dotnet build .\AcpiDebuggerApp\AcpiDebugger\AcpiDebugger.csproj -c Release
 ```
+
+ARM64 测试构建将 `Platform` 改为 `ARM64`，并使用 `dotnet build -r win-arm64`。
 
 导出 ACPI 表或加载 Override 时，请以管理员身份运行程序。
 

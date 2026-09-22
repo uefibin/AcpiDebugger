@@ -1,0 +1,645 @@
+/******************************************************************************
+ *
+ * Module Name: aslexternal - ASL External opcode compiler support
+ *
+ *****************************************************************************/
+
+/******************************************************************************
+ *
+ * Copyright (c) 1999 - 2026, Intel Corp.
+ * SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0-only
+ *
+ *****************************************************************************/
+
+#include "aslcompiler.h"
+#include "aslcompiler.y.h"
+#include "acparser.h"
+#include "amlcode.h"
+#include "acnamesp.h"
+
+
+#define _COMPONENT          ACPI_COMPILER
+        ACPI_MODULE_NAME    ("aslexternal")
+
+
+/* Local prototypes */
+
+static void
+ExInsertArgCount (
+    ACPI_PARSE_OBJECT       *Op);
+
+static void
+ExMoveExternals (
+    ACPI_PARSE_OBJECT       *DefinitionBlockOp);
+
+static void
+ExRemoveOpFromTree (
+    ACPI_PARSE_OBJECT       *Op);
+
+
+/*******************************************************************************
+ *
+ * FUNCTION:    ExDoExternal
+ *
+ * PARAMETERS:  Op                  - Current Parse node
+ *
+ * RETURN:      None
+ *
+ * DESCRIPTION: Add an External() definition to the global list. This list
+ *              is used to generate External opcodes.
+ *
+ ******************************************************************************/
+
+void
+ExDoExternal (
+    ACPI_PARSE_OBJECT       *Op)
+{
+    ACPI_PARSE_OBJECT       *ListOp;
+    ACPI_PARSE_OBJECT       *Prev;
+    ACPI_PARSE_OBJECT       *Next;
+    ACPI_PARSE_OBJECT       *ArgCountOp;
+    ACPI_PARSE_OBJECT       *TypeOp;
+    ACPI_PARSE_OBJECT       *ExternTypeOp = Op->Asl.Child->Asl.Next;
+    ACPI_PARSE_OBJECT       *Existing;
+    ACPI_PARSE_OBJECT       *NameOp = Op->Asl.Child;
+    ACPI_PARSE_OBJECT       *ExistingNameOp;
+    UINT32                  ExternType;
+    UINT8                   ParamCount = ASL_EXTERNAL_METHOD_UNKNOWN_PARAMS;
+    UINT32                  ParamTypes[ACPI_METHOD_NUM_ARGS];
+    char                    *NewPath = NULL;
+    char                    *ExistingPath;
+
+
+    ExternType = AnMapObjTypeToBtype (ExternTypeOp);
+    if (ExternType != ACPI_BTYPE_METHOD)
+    {
+        /*
+         * If this is not a method, it has zero parameters this local variable
+         * is used only for methods
+         */
+        ParamCount = 0;
+    }
+
+    /*
+     * The parser allows optional parameter return types regardless of the
+     * type. Check object type keyword emit error if optional parameter/return
+     * types exist.
+     *
+     * Check the parameter return type
+     */
+    TypeOp = ExternTypeOp->Asl.Next;
+    if (TypeOp->Asl.Child)
+    {
+        /* Ignore the return type for now. */
+
+        (void) MtProcessTypeOp (TypeOp->Asl.Child);
+        if (ExternType != ACPI_BTYPE_METHOD)
+        {
+            sprintf (AslGbl_MsgBuffer, "Found type [%s]", AcpiUtGetTypeName(ExternType));
+            AslError (ASL_ERROR, ASL_MSG_EXTERN_INVALID_RET_TYPE, TypeOp,
+                AslGbl_MsgBuffer);
+        }
+    }
+
+    /* Check the parameter types */
+
+    TypeOp = TypeOp->Asl.Next;
+    if (TypeOp->Asl.Child)
+    {
+        ParamCount = MtProcessParameterTypeList (TypeOp->Asl.Child, ParamTypes);
+        if (ExternType != ACPI_BTYPE_METHOD)
+        {
+            sprintf (AslGbl_MsgBuffer, "Found type [%s]", AcpiUtGetTypeName(ExternType));
+            AslError (ASL_ERROR, ASL_MSG_EXTERN_INVALID_PARAM_TYPE, TypeOp,
+                AslGbl_MsgBuffer);
+        }
+    }
+
+    ArgCountOp = Op->Asl.Child->Asl.Next->Asl.Next;
+    ArgCountOp->Asl.AmlOpcode = AML_RAW_DATA_BYTE;
+    ArgCountOp->Asl.ParseOpcode = PARSEOP_BYTECONST;
+    ArgCountOp->Asl.Value.Integer = ParamCount;
+    UtSetParseOpName (ArgCountOp);
+
+    /*
+     * Deduplicate identical External() declarations. The disassembler
+     * already collapses duplicates; mirror that behavior in the compiler
+     * so duplicate externals do not bloat emitted AML.
+     */
+
+    NewPath = NameOp->Asl.Namepath;
+    if (!NewPath && NameOp->Asl.Value.String)
+    {
+        (void) UtInternalizeName (NameOp->Asl.Value.String, &NewPath);
+        NameOp->Asl.Namepath = NewPath;
+    }
+
+    Existing = AslGbl_ExternalsListHead;
+    while (Existing && NewPath)
+    {
+        ExistingNameOp = Existing->Asl.Child->Asl.Child;
+        ExistingPath = ExistingNameOp->Asl.Namepath;
+        if (!ExistingPath && ExistingNameOp->Asl.Value.String)
+        {
+            (void) UtInternalizeName (ExistingNameOp->Asl.Value.String,
+                &ExistingPath);
+            ExistingNameOp->Asl.Namepath = ExistingPath;
+        }
+
+        if (ExistingPath && !strcmp (NewPath, ExistingPath))
+        {
+            ACPI_PARSE_OBJECT *ExistingArgCount;
+
+            /* Update arg count if this instance is more specific */
+
+            ExistingArgCount = Existing->Asl.Child->Asl.Child->Asl.Next->Asl.Next;
+            if ((ExternType == ACPI_BTYPE_METHOD) &&
+                (ParamCount < ExistingArgCount->Asl.Value.Integer))
+            {
+                ExistingArgCount->Asl.Value.Integer = ParamCount;
+            }
+
+            /* Remove duplicate External node from the parse tree */
+
+            ExRemoveOpFromTree (Op);
+            return;
+        }
+
+        Existing = Existing->Asl.Next;
+    }
+
+    /* Create new list node of arbitrary type */
+
+    ListOp = TrAllocateOp (PARSEOP_DEFAULT_ARG);
+
+    /* Store External node as child */
+
+    ListOp->Asl.Child = Op;
+    ListOp->Asl.Next = NULL;
+
+    if (AslGbl_ExternalsListHead)
+    {
+        /* Link new External to end of list */
+
+        Prev = AslGbl_ExternalsListHead;
+        Next = Prev;
+        while (Next)
+        {
+            Prev = Next;
+            Next = Next->Asl.Next;
+        }
+
+        Prev->Asl.Next = ListOp;
+    }
+    else
+    {
+        AslGbl_ExternalsListHead = ListOp;
+    }
+}
+
+
+/*******************************************************************************
+ *
+ * FUNCTION:    ExRemoveOpFromTree
+ *
+ * PARAMETERS:  Op              - Parse op to remove from the tree
+ *
+ * RETURN:      None
+ *
+ * DESCRIPTION: Unlink a parse op from its parent sibling list. Used to drop
+ *              duplicate External() declarations before AML emission.
+ *
+ ******************************************************************************/
+
+static void
+ExRemoveOpFromTree (
+    ACPI_PARSE_OBJECT       *Op)
+{
+    ACPI_PARSE_OBJECT       *Parent;
+    ACPI_PARSE_OBJECT       *Child;
+
+
+    if (!Op || !Op->Asl.Parent)
+    {
+        return;
+    }
+
+    Parent = Op->Asl.Parent;
+    Child = Parent->Asl.Child;
+
+    if (Child == Op)
+    {
+        Parent->Asl.Child = Op->Asl.Next;
+        return;
+    }
+
+    while (Child && Child->Asl.Next != Op)
+    {
+        Child = Child->Asl.Next;
+    }
+
+    if (Child)
+    {
+        Child->Asl.Next = Op->Asl.Next;
+    }
+}
+
+
+/*******************************************************************************
+ *
+ * FUNCTION:    ExInsertArgCount
+ *
+ * PARAMETERS:  Op              - Op for a method invocation
+ *
+ * RETURN:      None
+ *
+ * DESCRIPTION: Obtain the number of arguments for a control method -- from
+ *              the actual invocation.
+ *
+ ******************************************************************************/
+
+static void
+ExInsertArgCount (
+    ACPI_PARSE_OBJECT       *Op)
+{
+    ACPI_PARSE_OBJECT       *Next;
+    ACPI_PARSE_OBJECT       *NameOp;
+    ACPI_PARSE_OBJECT       *Child;
+    ACPI_PARSE_OBJECT       *ArgCountOp;
+    char *                  ExternalName;
+    char *                  CallName;
+    UINT16                  ArgCount = 0;
+    ACPI_STATUS             Status;
+
+
+    CallName = AcpiNsGetNormalizedPathname (Op->Asl.Node, TRUE);
+
+    Next = AslGbl_ExternalsListHead;
+    while (Next)
+    {
+        ArgCount = 0;
+
+        /* Skip if External node already handled */
+
+        if (Next->Asl.Child->Asl.CompileFlags & OP_VISITED)
+        {
+            Next = Next->Asl.Next;
+            continue;
+        }
+
+        NameOp = Next->Asl.Child->Asl.Child;
+        ExternalName = AcpiNsGetNormalizedPathname (NameOp->Asl.Node, TRUE);
+
+        if (strcmp (CallName, ExternalName))
+        {
+            ACPI_FREE (ExternalName);
+            Next = Next->Asl.Next;
+            continue;
+        }
+
+        Next->Asl.Child->Asl.CompileFlags |= OP_VISITED;
+
+        /*
+         * Since we will reposition Externals to the Root, set Namepath
+         * to the fully qualified name and recalculate the aml length
+         */
+        Status = UtInternalizeName (ExternalName,
+            &NameOp->Asl.Value.String);
+
+        ACPI_FREE (ExternalName);
+        if (ACPI_FAILURE (Status))
+        {
+            AslError (ASL_ERROR, ASL_MSG_COMPILER_INTERNAL,
+                NULL, "- Could not Internalize External");
+            break;
+        }
+
+        NameOp->Asl.AmlLength = strlen (NameOp->Asl.Value.String);
+
+        /* Get argument count */
+
+        Child = Op->Asl.Child;
+        while (Child)
+        {
+            ArgCount++;
+            Child = Child->Asl.Next;
+        }
+
+        /* Setup ArgCount operand */
+
+        ArgCountOp = Next->Asl.Child->Asl.Child->Asl.Next->Asl.Next;
+        ArgCountOp->Asl.Value.Integer = ArgCount;
+        break;
+    }
+
+    ACPI_FREE (CallName);
+}
+
+
+/*******************************************************************************
+ *
+ * FUNCTION:    ExAmlExternalWalkBegin
+ *
+ * PARAMETERS:  ASL_WALK_CALLBACK
+ *
+ * RETURN:      None
+ *
+ * DESCRIPTION: Parse tree walk to create external opcode list for methods.
+ *
+ ******************************************************************************/
+
+ACPI_STATUS
+ExAmlExternalWalkBegin (
+    ACPI_PARSE_OBJECT       *Op,
+    UINT32                  Level,
+    void                    *Context)
+{
+
+    /* External list head saved in the definition block op */
+
+    if (Op->Asl.ParseOpcode == PARSEOP_DEFINITION_BLOCK)
+    {
+        AslGbl_ExternalsListHead = Op->Asl.Value.Arg;
+    }
+
+    if (!AslGbl_ExternalsListHead)
+    {
+        return (AE_OK);
+    }
+
+    if (Op->Asl.ParseOpcode != PARSEOP_METHODCALL)
+    {
+        return (AE_OK);
+    }
+
+    /*
+     * The NameOp child under an ExternalOp gets turned into PARSE_METHODCALL
+     * by XfNamespaceLocateBegin(). Ignore these.
+     */
+    if (Op->Asl.Parent &&
+        Op->Asl.Parent->Asl.ParseOpcode == PARSEOP_EXTERNAL)
+    {
+        return (AE_OK);
+    }
+
+    ExInsertArgCount (Op);
+    return (AE_OK);
+}
+
+
+/*******************************************************************************
+ *
+ * FUNCTION:    ExAmlExternalWalkEnd
+ *
+ * PARAMETERS:  ASL_WALK_CALLBACK
+ *
+ * RETURN:      None
+ *
+ * DESCRIPTION: Parse tree walk to create external opcode list for methods.
+ *              Here, we just want to catch the case where a definition block
+ *              has been completed. Then we move all of the externals into
+ *              a single block in the parse tree and thus the AML code.
+ *
+ ******************************************************************************/
+
+ACPI_STATUS
+ExAmlExternalWalkEnd (
+    ACPI_PARSE_OBJECT       *Op,
+    UINT32                  Level,
+    void                    *Context)
+{
+
+    if (Op->Asl.ParseOpcode == PARSEOP_DEFINITION_BLOCK)
+    {
+        /*
+         * Process any existing external list. (Support for
+         * multiple definition blocks in a single file/compile)
+         */
+        ExMoveExternals (Op);
+        AslGbl_ExternalsListHead = NULL;
+    }
+
+    return (AE_OK);
+}
+
+
+/*******************************************************************************
+ *
+ * FUNCTION:    ExMoveExternals
+ *
+ * PARAMETERS:  DefinitionBlockOp       - Op for current definition block
+ *
+ * RETURN:      None
+ *
+ * DESCRIPTION: Move all externals present in the source file into a single
+ *              block of AML code, surrounded by an "If (0)" to prevent
+ *              AML interpreters from attempting to execute the External
+ *              opcodes.
+ *
+ ******************************************************************************/
+
+static void
+ExMoveExternals (
+    ACPI_PARSE_OBJECT       *DefinitionBlockOp)
+{
+    ACPI_PARSE_OBJECT       *ParentOp;
+    ACPI_PARSE_OBJECT       *ExternalOp;
+    ACPI_PARSE_OBJECT       *PredicateOp;
+    ACPI_PARSE_OBJECT       *NextOp;
+    ACPI_PARSE_OBJECT       *Prev;
+    ACPI_PARSE_OBJECT       *Next;
+    char                    *ExternalName;
+    ACPI_OBJECT_TYPE        ObjType;
+    ACPI_STATUS             Status;
+    UINT32                  i;
+
+
+    if (!AslGbl_ExternalsListHead)
+    {
+        return;
+    }
+
+    /* Remove the External nodes from the tree */
+
+    NextOp = AslGbl_ExternalsListHead;
+    while (NextOp)
+    {
+        /*
+         * The External is stored in child pointer of each node in the
+         * list
+         */
+        ExternalOp = NextOp->Asl.Child;
+
+        /* Get/set the fully qualified name */
+
+        ExternalName = AcpiNsGetNormalizedPathname (ExternalOp->Asl.Node, TRUE);
+        ExternalOp->Asl.ExternalName = ExternalName;
+        ExternalOp->Asl.Namepath = ExternalName;
+
+        /* Set line numbers (for listings, etc.) */
+
+        ExternalOp->Asl.LineNumber = 0;
+        ExternalOp->Asl.LogicalLineNumber = 0;
+
+        Next = ExternalOp->Asl.Child;
+        Next->Asl.LineNumber = 0;
+        Next->Asl.LogicalLineNumber = 0;
+
+        if (Next->Asl.ParseOpcode == PARSEOP_NAMESEG)
+        {
+            Next->Asl.ParseOpcode = PARSEOP_NAMESTRING;
+        }
+
+        Next->Asl.ExternalName = ExternalName;
+        Status = UtInternalizeName (ExternalName, &Next->Asl.Value.String);
+        if (ACPI_FAILURE (Status))
+        {
+            AslError (ASL_ERROR, ASL_MSG_COMPILER_INTERNAL,
+                Next, "Could not internalize namestring");
+            return;
+        }
+
+        Next->Asl.AmlLength = strlen (Next->Asl.Value.String);
+
+        Next = Next->Asl.Next;
+        Next->Asl.LineNumber = 0;
+        Next->Asl.LogicalLineNumber = 0;
+
+        Next = Next->Asl.Next;
+        Next->Asl.LineNumber = 0;
+        Next->Asl.LogicalLineNumber = 0;
+
+        Next = Next->Asl.Next;
+        Next->Asl.LineNumber = 0;
+        Next->Asl.LogicalLineNumber = 0;
+
+        ParentOp = ExternalOp->Asl.Parent;
+        Prev = Next = ParentOp->Asl.Child;
+
+        /* Now find the External node's position in parse tree */
+
+        while (Next != ExternalOp)
+        {
+            Prev = Next;
+            Next = Next->Asl.Next;
+        }
+
+        /* Remove the External from the parse tree */
+
+        if (Prev == ExternalOp)
+        {
+            /* External was the first child node */
+
+            ParentOp->Asl.Child = ExternalOp->Asl.Next;
+        }
+
+        Prev->Asl.Next = ExternalOp->Asl.Next;
+        ExternalOp->Asl.Next = NULL;
+        ExternalOp->Asl.Parent = AslGbl_ExternalsListHead;
+
+        /* Point the External to the next in the list */
+
+        if (NextOp->Asl.Next)
+        {
+            ExternalOp->Asl.Next = NextOp->Asl.Next->Asl.Child;
+        }
+
+        NextOp = NextOp->Asl.Next;
+    }
+
+    /*
+     * Loop again to remove MethodObj Externals for which
+     * a MethodCall was not found (dead external reference)
+     */
+    Prev = AslGbl_ExternalsListHead->Asl.Child;
+    Next = Prev;
+    while (Next)
+    {
+        ObjType = (ACPI_OBJECT_TYPE)
+            Next->Asl.Child->Asl.Next->Asl.Value.Integer;
+
+        if (ObjType == ACPI_TYPE_METHOD &&
+            !(Next->Asl.CompileFlags & OP_VISITED))
+        {
+            if (Next == Prev)
+            {
+                AslGbl_ExternalsListHead->Asl.Child = Next->Asl.Next;
+                Next->Asl.Next = NULL;
+                Prev = AslGbl_ExternalsListHead->Asl.Child;
+                Next = Prev;
+                continue;
+            }
+            else
+            {
+                Prev->Asl.Next = Next->Asl.Next;
+                Next->Asl.Next = NULL;
+                Next = Prev->Asl.Next;
+                continue;
+            }
+        }
+
+        Prev = Next;
+        Next = Next->Asl.Next;
+    }
+
+    /* If list is now empty, don't bother to make If (0) block */
+
+    if (!AslGbl_ExternalsListHead->Asl.Child)
+    {
+        return;
+    }
+
+    /* Convert Gbl_ExternalsListHead parent to If(). */
+
+    AslGbl_ExternalsListHead->Asl.ParseOpcode = PARSEOP_IF;
+    AslGbl_ExternalsListHead->Asl.AmlOpcode = AML_IF_OP;
+    AslGbl_ExternalsListHead->Asl.CompileFlags = OP_AML_PACKAGE;
+    UtSetParseOpName (AslGbl_ExternalsListHead);
+
+    /* Create a Zero op for the If predicate */
+
+    PredicateOp = TrAllocateOp (PARSEOP_ZERO);
+    PredicateOp->Asl.AmlOpcode = AML_ZERO_OP;
+
+    PredicateOp->Asl.Parent = AslGbl_ExternalsListHead;
+    PredicateOp->Asl.Child = NULL;
+    PredicateOp->Asl.Next = AslGbl_ExternalsListHead->Asl.Child;
+    AslGbl_ExternalsListHead->Asl.Child = PredicateOp;
+
+    /* Set line numbers (for listings, etc.) */
+
+    AslGbl_ExternalsListHead->Asl.LineNumber = 0;
+    AslGbl_ExternalsListHead->Asl.LogicalLineNumber = 0;
+
+    PredicateOp->Asl.LineNumber = 0;
+    PredicateOp->Asl.LogicalLineNumber = 0;
+
+    /* Insert block back in the list */
+
+    Prev = DefinitionBlockOp->Asl.Child;
+    Next = Prev;
+
+    /* Find last default arg */
+
+    for (i = 0; i < 6; i++)
+    {
+        Prev = Next;
+        Next = Prev->Asl.Next;
+    }
+
+    if (Next)
+    {
+        /* Definition Block is not empty */
+
+        AslGbl_ExternalsListHead->Asl.Next = Next;
+    }
+    else
+    {
+        /* Definition Block is empty. */
+
+        AslGbl_ExternalsListHead->Asl.Next = NULL;
+    }
+
+    Prev->Asl.Next = AslGbl_ExternalsListHead;
+    AslGbl_ExternalsListHead->Asl.Parent = Prev->Asl.Parent;
+}

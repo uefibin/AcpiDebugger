@@ -8,7 +8,7 @@ namespace AcpiDebugger.Services;
 public static class IaslDiagnosticService
 {
     private static readonly Regex SourceLocationRegex = new(
-        @"(?im)^(?<file>[^\r\n:]+\.dsl)\s+(?<line>\d+):.*$",
+        @"(?im)^(?<file>[^\r\n]*?\.dsl)\s+(?<line>\d+):.*$",
         RegexOptions.Compiled);
 
     private static readonly Regex DiagnosticMessageRegex = new(

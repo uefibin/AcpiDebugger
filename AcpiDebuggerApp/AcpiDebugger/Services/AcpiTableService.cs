@@ -54,6 +54,9 @@ public static class AcpiTableService
         "BGRT" => "Boot Graphics Resource Table",
         "DBG2" => "Debug Port Table 2",
         "DBGP" => "Debug Port Table",
+        "DTPR" => "DMA Remapping Reporting Table",
+        "FACS" => "Firmware ACPI Control Structure",
+        "FIDT" => "Firmware ID Table",
         "HPET" => "High Precision Event Timer Table",
         "MCFG" => "PCI Express Memory Mapped Configuration",
         "FPDT" => "Firmware Performance Data Table",
@@ -63,6 +66,7 @@ public static class AcpiTableService
         "TPM2" => "Trusted Platform Module 2 Table",
         "UEFI" => "UEFI ACPI Data Table",
         "WSMT" => "Windows SMM Security Mitigations Table",
+        "RSDT" => "Root System Description Table",
         "XSDT" => "Extended System Description Table",
         _ => "ACPI firmware table"
     };
