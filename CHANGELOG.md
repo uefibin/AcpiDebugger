@@ -1,11 +1,10 @@
 # Changelog
 
+## 1.4.0 - 2026-09-22
+
 - Re-enabled the integrated Load Override backend after matching Microsoft `asl.exe` full-table replacement stream and registry-value boundary behavior, restoring the required firmware revision increment, and adding strict table length/checksum validation plus registry read-back verification.
 - Changed Remove Override to clear every detected ACPI override revision plus `acpitabl.dat`, without requiring a selected table; unrelated ACPI parameter keys such as `WakeUp` are preserved.
 - Removed the Microsoft `asl.exe` dependency from Load/Remove Override. The integrated loader reproduces `/loadtable` registry deltas (`offset`, `length`, changed bytes), value splitting, identifier normalization, and verification; removal also cleans the temporary `acpitabl.dat` mechanism used by an earlier build.
-
-## Unreleased
-
 - Replaced the `acpidump.exe` dump dependency with native Windows ACPI table extraction, including all SSDT instances exposed under `HKLM\HARDWARE\ACPI`.
 - Integrated ACPICA source into `third_party/acpica` and added an in-process x64/ARM64 compiler/disassembler backend; AML/ASL operations no longer launch `iasl.exe`.
 - Expanded Table-specific decoding using the Binio ACPI decoder as the reference, including detailed variable-length APIC, DBG2, DTPR, FADT/FACS, FIDT, FPDT, LPIT, MCFG, NHLT, PHAT, TPM2, UEFI, WSMT, and root-table fields with truncation reporting.
