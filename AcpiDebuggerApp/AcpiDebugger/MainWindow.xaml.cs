@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Security.Principal;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -64,8 +65,8 @@ public partial class MainWindow : Window
 
         ConfigureEditor();
         LocateTools();
-        RefreshFileLists();
         UpdateToolStatus();
+        Loaded += MainWindow_Loaded;
 
         MachineText.Text = Environment.MachineName;
         bool testMode = _overrideService?.IsTestSigningEnabled() == true;
@@ -133,21 +134,52 @@ public partial class MainWindow : Window
 
     private void RefreshFileLists()
     {
+        ApplyFileLists(ScanWorkspaceFiles());
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= MainWindow_Loaded;
+        try
+        {
+            (List<AcpiFileItem> amlItems, List<string> aslFiles) =
+                await Task.Run(ScanWorkspaceFiles);
+            ApplyFileLists((amlItems, aslFiles));
+            RunPendingElevatedOperation();
+        }
+        catch (Exception ex)
+        {
+            Log($"Could not load workspace files: {ex.Message}");
+        }
+    }
+
+    private (List<AcpiFileItem> AmlItems, List<string> AslFiles) ScanWorkspaceFiles()
+    {
+        List<AcpiFileItem> amlItems = Directory.EnumerateFiles(_workspaceDir)
+            .Where(file => file.EndsWith(".dat", StringComparison.OrdinalIgnoreCase)
+                        || file.EndsWith(".aml", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(Path.GetFileName)
+            .Select(file => new AcpiFileItem(Path.GetFileName(file), GetAcpiDescription(file)))
+            .ToList();
+
+        List<string> aslFiles = Directory.EnumerateFiles(_workspaceDir, "*.dsl")
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .OrderBy(name => name)
+            .ToList();
+
+        return (amlItems, aslFiles);
+    }
+
+    private void ApplyFileLists((List<AcpiFileItem> AmlItems, List<string> AslFiles) files)
+    {
         AmlList.ItemsSource = null;
         AslList.ItemsSource = null;
 
         _amlItems.Clear();
-        _amlItems.AddRange(Directory.EnumerateFiles(_workspaceDir)
-            .Where(file => file.EndsWith(".dat", StringComparison.OrdinalIgnoreCase)
-                        || file.EndsWith(".aml", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(Path.GetFileName)
-            .Select(file => new AcpiFileItem(Path.GetFileName(file), GetAcpiDescription(file))));
-
+        _amlItems.AddRange(files.AmlItems);
         _aslFiles.Clear();
-        _aslFiles.AddRange(Directory.EnumerateFiles(_workspaceDir, "*.dsl")
-            .Select(Path.GetFileName)
-            .OfType<string>()
-            .OrderBy(name => name));
+        _aslFiles.AddRange(files.AslFiles);
 
         AmlList.ItemsSource = _amlItems;
         AslList.ItemsSource = _aslFiles;
@@ -159,9 +191,70 @@ public partial class MainWindow : Window
     private static string GetAcpiDescription(string filePath) =>
         AcpiTableService.GetSummary(filePath);
 
+    private void RunPendingElevatedOperation()
+    {
+        string[] arguments = Environment.GetCommandLineArgs();
+        if (arguments.Length < 2 || !IsRunningAsAdministrator())
+            return;
+
+        switch (arguments[1])
+        {
+            case "--elevated-dump":
+                Dispatcher.BeginInvoke(() => DumpAml_Click(this, new RoutedEventArgs()));
+                break;
+            case "--elevated-load" when arguments.Length == 3:
+                AmlList.SelectedItem = _amlItems.FirstOrDefault(item =>
+                    item.Filename.Equals(arguments[2], StringComparison.OrdinalIgnoreCase));
+                Dispatcher.BeginInvoke(() => LoadToSystem_Click(this, new RoutedEventArgs()));
+                break;
+            case "--elevated-remove":
+                Dispatcher.BeginInvoke(() => RemoveOverride_Click(this, new RoutedEventArgs()));
+                break;
+        }
+    }
+
+    private static bool IsRunningAsAdministrator()
+    {
+        using WindowsIdentity identity = WindowsIdentity.GetCurrent();
+        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+    }
+
+    private bool EnsureElevated(string operation, string? fileName = null)
+    {
+        if (IsRunningAsAdministrator())
+            return true;
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = Environment.ProcessPath ?? throw new InvalidOperationException("Application path is unavailable."),
+            WorkingDirectory = AppContext.BaseDirectory,
+            UseShellExecute = true,
+            Verb = "runas"
+        };
+        startInfo.ArgumentList.Add(operation);
+        if (fileName != null)
+            startInfo.ArgumentList.Add(fileName);
+
+        try
+        {
+            Process.Start(startInfo);
+            Close();
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            Log("Administrator elevation was cancelled.");
+        }
+        catch (Exception ex)
+        {
+            ShowError("Could not restart as administrator", ex);
+        }
+        return false;
+    }
+
     private async void DumpAml_Click(object sender, RoutedEventArgs e)
     {
-        if (!EnsureTools() || !ConfirmDiscardChanges()) return;
+        if (!EnsureTools() || !ConfirmDiscardChanges()
+            || !EnsureElevated("--elevated-dump")) return;
 
         try
         {
@@ -484,6 +577,9 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (!ConfirmDiscardChanges() || !EnsureElevated("--elevated-load", item.Filename))
+            return;
+
         try
         {
             SetBusy(true, $"Loading {item.Filename}...");
@@ -526,6 +622,9 @@ public partial class MainWindow : Window
 
     private async void RemoveOverride_Click(object sender, RoutedEventArgs e)
     {
+        if (!ConfirmDiscardChanges() || !EnsureElevated("--elevated-remove"))
+            return;
+
         try
         {
             SetBusy(true, "Removing all ACPI overrides...");

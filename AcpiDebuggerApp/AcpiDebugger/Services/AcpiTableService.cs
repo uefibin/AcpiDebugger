@@ -36,8 +36,15 @@ public static class AcpiTableService
     {
         try
         {
-            AcpiTableInfo info = Read(filePath);
-            return $"OEM: {info.OemId}, Table: {info.TableId}";
+            using FileStream file = File.OpenRead(filePath);
+            if (file.Length < 24)
+                return "Unknown";
+
+            Span<byte> header = stackalloc byte[24];
+            file.ReadExactly(header);
+            string oemId = Encoding.ASCII.GetString(header.Slice(10, 6)).Trim();
+            string tableId = Encoding.ASCII.GetString(header.Slice(16, 8)).Trim();
+            return $"OEM: {oemId}, Table: {tableId}";
         }
         catch
         {
