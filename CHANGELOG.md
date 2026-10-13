@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.1 - 2026-10-13
+
+- Show the main window before loading workspace tables; read only ACPI headers for list summaries.
+- Start normally without administrator elevation. Dump and override actions request elevation when invoked.
+
 ## 1.4.0 - 2026-09-22
 
 - Re-enabled the integrated Load Override backend after matching Microsoft `asl.exe` full-table replacement stream and registry-value boundary behavior, restoring the required firmware revision increment, and adding strict table length/checksum validation plus registry read-back verification.
