@@ -12,6 +12,8 @@
 
 A modern Windows ACPI development and debugging tool for BIOS/UEFI engineers. It provides a complete workflow for dumping ACPI tables, decompiling AML, editing ASL, compiling AML, and loading Windows ACPI overrides.
 
+![ACPI Debugger main window](docs/images/acpi-debugger-main.png)
+
 ## Features
 
 - Browse ACPI tables (DSDT / SSDT)

@@ -12,6 +12,8 @@
 
 ACPI Debugger 是一款面向 BIOS/UEFI 工程师的 Windows ACPI 开发与调试工具，提供 ACPI 表导出、AML 反编译、ASL 编辑、AML 编译及 Windows ACPI Override 加载的一站式工作流。
 
+![ACPI Debugger 主界面](docs/images/acpi-debugger-main.png)
+
 ## 功能特点
 
 - 浏览 ACPI Table（DSDT / SSDT）
